@@ -6,14 +6,18 @@ NVCC    := nvcc
 NVFLAGS := -O3 -I$(CUDIR)/include -m64 -arch=compute_61 -code=sm_61 -Xptxas -v -rdc=true
 LIB     := -lcufft -lcudart
 
-BIN2    := fft_cuFFT
+TARGET := ./tree
+OBJ    := ./lib/main.o ./lib/init.o
 
-all: $(BIN2) 
+$(TARGET):$(OBJ)
+	$(NVCC) $^ $(NVFLAGS) -o $(TARGET) 
 
-
-$(BIN2): fft_cuFFT.cu
-	$(NVCC) -o $(BIN2) $(NVFLAGS) $< $(LIB)
+./lib/main.o : ./src/main.cu
+	$(NVCC) $(NVFLAGS) -c $< -o $@
+./lib/init.o : ./src/init.cu
+	$(NVCC) $(NVFLAGS) -c $< -o $@
+	
 
 
 clean:
-	rm -f $(BIN1) $(BIN2) $(BIN3) *.o
+	rm -f $(TARGET) $(OBJ) *.o
