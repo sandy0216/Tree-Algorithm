@@ -1,19 +1,11 @@
 #include <cstdio>
 #include <vector>
 #include "../inc/init.h"
+#include "../inc/def_node.h"
+#include "../inc/create_tree.h"
 
 using namespace std;
 
-struct NODE{
-	double center[2];
-	double centerofmass[2];
-	double totalmass;
-	double side;
-	NODE *next1;
-	NODE *next2;
-	NODE *next3;
-	NODE *next4;
-};
 
 int main( int argc, char* argv[] )
 {
@@ -36,14 +28,10 @@ int main( int argc, char* argv[] )
 		fprintf(initfile, "%d\t%.3f\t%.3f\t%.3f\n",i,x[i],y[i],mass[i]);
 	}
 	// End of creating intial conditions
-
+	
 	NODE *head = new NODE();
-	head->center[0] = boxsize/2;
-	head->center[1] = boxsize/2;
-	head->next1 = NULL;
-	head->next2 = NULL;
-	head->next3 = NULL;
-	head->next4 = NULL;
+	create_tree(head, x, y, mass, boxsize);
+
 
 	NODE *current = head;
 	/*for( int i=1;i<n;i++ ){

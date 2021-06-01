@@ -7,15 +7,22 @@ NVFLAGS := -O3 -I$(CUDIR)/include -m64 -arch=compute_61 -code=sm_61 -Xptxas -v -
 LIB     := -lcufft -lcudart
 
 TARGET := ./tree
-OBJ    := ./lib/main.o ./lib/init.o
+OBJ    := ./lib/init.o ./lib/create_tree.o ./lib/main.o
 
 $(TARGET):$(OBJ)
-	$(NVCC) $^ $(NVFLAGS) -o $(TARGET) 
+	$(NVCC) $(OBJ) $(NVFLAGS) -o $(TARGET)
 
-./lib/main.o : ./src/main.cu
+#%.o: %.c
+#	$(NVCC) -c -o $< $@
+
+./lib/main.o : ./src/main.cu 
 	$(NVCC) $(NVFLAGS) -c $< -o $@
 ./lib/init.o : ./src/init.cu
 	$(NVCC) $(NVFLAGS) -c $< -o $@
+./lib/create_tree.o : ./src/create_tree.cu
+	$(NVCC) $(NVFLAGS) -c $< -o $@
+#./lib/def_node.o : ./src/def_node.cu
+#	$(NVCC) $(NVFLAGS) -c $< -o $@
 	
 
 
