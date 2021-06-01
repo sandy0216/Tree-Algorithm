@@ -33,7 +33,7 @@ int main( int argc, char* argv[] )
 	create_tree(head, x, y, mass, boxsize);
 
 
-	NODE *current = head;
+	//NODE *current = head;
 	/*for( int i=1;i<n;i++ ){
 		current->next = new NODE();
 		current = current->next;
@@ -41,12 +41,18 @@ int main( int argc, char* argv[] )
 		current->next = NULL;
 	}*/
 
-	printf("Test:\n");
+	/*printf("Test:\n");
 	current = head;
 	while( current != NULL ){
 		printf("%.3f\t%.3f\n",current->center[0],current->center[1]);
-		current = current->next1;
-	}
+		for( int i=0;i<4;i++ ){
+		current = head->next[i];
+		if( current != NULL ){
+		printf("%.3f\t%.3f\n",current->center[0],current->center[1]);
+		}
+		}
+		current = current->next[0];	
+	}*/
 	
 	
 
