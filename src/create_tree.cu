@@ -29,7 +29,7 @@ void add_particle(NODE *head, double x, double y, double mass)
 			current = current->next[reg];
 			if(current == NULL){  printf("No subgrid, exist bug!!!\n");  }
 		}else{	//reach the smallest grid which contains only one particle
-			finest_grid(current,x,y,mass);	
+			reg = finest_grid(current,x,y,mass);	
 		}//End of if-else while reaching the smallest grid
 		
 	}

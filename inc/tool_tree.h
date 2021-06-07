@@ -3,7 +3,7 @@
 
 void create_node(NODE *head,double cx, double cy, double x, double y, double mass, double side);
 int region(double x, double y, double cx, double cy);
-void finest_grid(NODE *current, double x, double y, double mass);
+int finest_grid(NODE *current, double x, double y, double mass);
 
 
 
