@@ -32,12 +32,11 @@ int region(double x, double y, double cx, double cy){
 	return 5;
 }
 
-int finest_grid(NODE *current, double x, double y, double mass)
+void finest_grid(NODE *current, double x, double y, double mass)
 {
 	double cxs[4],cys[4];
 	double cx,cy,cmx,cmy,side,m;
 	int reg;
-	int out=0;
 	NODE* nextnode;
 	if( current->leaf==0 ){
 	//while(true){
@@ -50,7 +49,7 @@ int finest_grid(NODE *current, double x, double y, double mass)
 		m = current->mass;
 
 		//Check if the two particle is too close
-		if( sqrt(pow(cx-x,2)+pow(cy-y,2))<1e-2 ){
+		if( sqrt(pow(cx-x,2)+pow(cy-y,2))<1e-3 ){
 			printf("Two particles are too close!!!\n");
 			printf("Old particle is at %.3f, %.3f\n",cmx,cmy);
 			printf("New particle is at %.3f, %.3f\n",x,y);
@@ -69,9 +68,11 @@ int finest_grid(NODE *current, double x, double y, double mass)
 		else{
 			nextnode = new NODE();
 			current->next[reg] = nextnode;
+#ifdef DEBUG
 			printf("[Parent]Create node at Quad %d\n",reg);
 			printf("[Parent]Grid cneter %.3f, %.3f\n",cx,cy);
 			printf("[Parent]Particle position %.3f, %.3f\n",cmx,cmy);
+#endif
 			create_node(current->next[reg],cxs[reg],cys[reg],cmx,cmy,m,side/2);
 		}
 		
@@ -85,24 +86,20 @@ int finest_grid(NODE *current, double x, double y, double mass)
 		
 		reg = region(x,y,cx,cy);
 		if( current->next[reg]!=NULL ){
-			out = finest_grid(current->next[reg],x,y,mass);
-			if( out==1 ){ return 1; }
+			//printf("oh no\n");
+			finest_grid(current->next[reg],x,y,mass);
 		}else{
 			nextnode = new NODE();
 			current->next[reg] = nextnode;
-			current = current->next[reg];
+#ifdef DEBUG
 			printf("[Children]Create node at Quad %d\n",reg);
 			printf("[Children]Grid cneter %.3f, %.3f\n",cx,cy);
 			printf("[Children]Particle position %.3f, %.3f\n",x,y);
+#endif 
 			create_node(current->next[reg],cxs[reg],cys[reg],x,y,mass,side/2);
 			if( current == NULL ){ printf("Creation of subnode failed.\n"); }
 		}
-	}else{
-		printf("Error!!!\n");
-		return 1;
-	}
-	printf("Error!!!\n");
-	return 0;
+	}//end of if
 }//end of function
 
 	

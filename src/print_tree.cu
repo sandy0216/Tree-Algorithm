@@ -14,10 +14,13 @@ void print_tree(NODE *head)
 			if( current != NULL ){
 				printf("===Node %d===\n",i);
 				print_node(current);
-				printf("Kids of this node\n");
-				print_tree(current);	
+				if( current->leaf != 0 ){
+					printf("Kids of this node\n");
+					print_tree(current);	
+				}
 			}
 		}
+		printf("====end of this tree====\n");
 	}else{
 		//printf("No nodes inside\n");
 	}
@@ -34,5 +37,19 @@ void print_node(NODE *current){
 	}
 }
 
-
-
+char *str_contact(const char *str1, const char *str2)
+{
+	char *result = (char *)malloc(strlen(str1)+strlen(str2)+1);
+	if( !result ){
+		printf("Malloc Fail\n");
+		exit(EXIT_FAILURE);
+	}
+	char *temp = result;
+	while(*str1 !='\0'){
+		*result++ = *str1++;
+	}
+	while((*result++ = *str2)!='\0'){
+		;
+	}
+	return temp;
+}
