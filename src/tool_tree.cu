@@ -37,9 +37,9 @@ int finest_grid(NODE *current, double x, double y, double mass)
 	double cxs[4],cys[4];
 	double cx,cy,cmx,cmy,side,m;
 	int reg;
-	int out=1;
+	int out=0;
 	NODE* nextnode;
-	while(true){
+	if( current->leaf==0 ){
 	//while(true){
 		//input parameters
 		cx = current->center[0];
@@ -51,7 +51,7 @@ int finest_grid(NODE *current, double x, double y, double mass)
 
 		//Check if the two particle is too close
 		if( sqrt(pow(cx-x,2)+pow(cy-y,2))<1e-2 ){
-			printf("The two particles are too close!!!\n");
+			printf("Two particles are too close!!!\n");
 			printf("Old particle is at %.3f, %.3f\n",cmx,cmy);
 			printf("New particle is at %.3f, %.3f\n",x,y);
 			exit(1);
@@ -72,9 +72,9 @@ int finest_grid(NODE *current, double x, double y, double mass)
 			printf("[Parent]Create node at Quad %d\n",reg);
 			printf("[Parent]Grid cneter %.3f, %.3f\n",cx,cy);
 			printf("[Parent]Particle position %.3f, %.3f\n",cmx,cmy);
-			create_node(current->next[reg],cxs[reg],cys[reg],cmx,cmy,mass,side/2);
+			create_node(current->next[reg],cxs[reg],cys[reg],cmx,cmy,m,side/2);
 		}
-	
+		
 		//update information of current grid
 		current->leaf = 1;
 		current->num = current->num + 1;
@@ -82,22 +82,25 @@ int finest_grid(NODE *current, double x, double y, double mass)
 		current->centerofmass[1] = (cmy*m+y*mass)/(m+mass);
 		current->mass = m+mass;
 
+		
 		reg = region(x,y,cx,cy);
-		if( current->next[reg] != NULL ){
+		if( current->next[reg]!=NULL ){
 			out = finest_grid(current->next[reg],x,y,mass);
 			if( out==1 ){ return 1; }
 		}else{
 			nextnode = new NODE();
 			current->next[reg] = nextnode;
-			//current = current->next[reg];
+			current = current->next[reg];
 			printf("[Children]Create node at Quad %d\n",reg);
 			printf("[Children]Grid cneter %.3f, %.3f\n",cx,cy);
 			printf("[Children]Particle position %.3f, %.3f\n",x,y);
 			create_node(current->next[reg],cxs[reg],cys[reg],x,y,mass,side/2);
 			if( current == NULL ){ printf("Creation of subnode failed.\n"); }
-			return 1;
 		}
-	}//end of while loop
+	}else{
+		printf("Error!!!\n");
+		return 1;
+	}
 	printf("Error!!!\n");
 	return 0;
 }//end of function
