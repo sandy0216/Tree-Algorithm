@@ -37,19 +37,3 @@ void print_node(NODE *current){
 	}
 }
 
-char *str_contact(const char *str1, const char *str2)
-{
-	char *result = (char *)malloc(strlen(str1)+strlen(str2)+1);
-	if( !result ){
-		printf("Malloc Fail\n");
-		exit(EXIT_FAILURE);
-	}
-	char *temp = result;
-	while(*str1 !='\0'){
-		*result++ = *str1++;
-	}
-	while((*result++ = *str2)!='\0'){
-		;
-	}
-	return temp;
-}

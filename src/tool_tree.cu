@@ -49,7 +49,7 @@ void finest_grid(NODE *current, double x, double y, double mass)
 		m = current->mass;
 
 		//Check if the two particle is too close
-		if( sqrt(pow(cx-x,2)+pow(cy-y,2))<1e-3 ){
+		if( sqrt(pow(cx-x,2)+pow(cy-y,2))<1e-7 ){
 			printf("Two particles are too close!!!\n");
 			printf("Old particle is at %.3f, %.3f\n",cmx,cmy);
 			printf("New particle is at %.3f, %.3f\n",x,y);

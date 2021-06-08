@@ -4,6 +4,7 @@
 #include "../inc/print_tree.h"
 #include "../inc/tool_tree.h"
 
+//#define DEBUG
 void add_particle(NODE *head, double x, double y, double mass)
 {
 	NODE *current = head;
@@ -62,11 +63,12 @@ void create_tree(NODE *head, double *x, double *y, double *mass, const double bo
 	//printf("=====Add particle=====\n");
 	for( int i=1;i<n;i++ ){
 		add_particle(head,x[i],y[i],mass[i]);
+		//printf("add %d\n",i);
 	}
 	//add_particle(head,x[2],y[2],mass[2]);
 	NODE* current=head->next[0];
 	if( current == NULL ){
-		printf("creation failed\n");
+		printf("[tree]creation failed\n");
 	}
 	//print_tree(head);
 	//add_particle(head, x[1], y[1], mass[0]);

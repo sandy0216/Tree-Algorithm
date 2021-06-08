@@ -6,7 +6,7 @@
 
 //#define DEBUG_force
 
-void cal_node(NODE *head, double x, double y, double mass, double *dfx, double *dfy, double theta)
+void node_force(NODE *head, double x, double y, double mass, double *dfx, double *dfy, double theta)
 {
 	double cmx, cmy, r, side, m;
 	cmx  = head->centerofmass[0];
@@ -39,11 +39,33 @@ void cal_node(NODE *head, double x, double y, double mass, double *dfx, double *
 #ifdef DEBUG_force
 			printf("Exploring node %d......\n",i);	
 #endif
-			cal_node(head->next[i],x,y,mass,dfx,dfy,theta);
+			node_force(head->next[i],x,y,mass,dfx,dfy,theta);
 		}
 		}
 	}
 }// End of the function
+
+void node_potential(NODE *head, double x, double y, double mass, double *dv, double theta)
+{
+	double cmx, cmy, r, side, m;
+	cmx  = head->centerofmass[0];
+	cmy  = head->centerofmass[1];
+	side = head->side;
+	m    = head->mass;
+	r   = sqrt(pow(cmx-x,2)+pow(cmy-y,2));
+	if( r<1e-3 ){
+	}else if( side/r < theta || head->num==1 ){
+		*dv = *dv-mass*m/r;
+	}else{
+		for( int i=0;i<4;i++ ){
+		if( head->next[i] != NULL ){
+			node_potential(head->next[i],x,y,mass,dv,theta);
+		}
+		}
+	}
+}
+
+
 
 void cal_ana(double px, double py, double pmass, double *x, double *y, double *mass, int n, double tx, double ty)
 {
@@ -64,6 +86,19 @@ void cal_ana(double px, double py, double pmass, double *x, double *y, double *m
 	}
 }
 
+void direct_nbody( double px, double py, double pmass, double *x, double *y, double *mass, int n, double *fx, double *fy)
+{
+	*fx = 0;
+	*fy = 0;
+	double r;
+	for( int i=0;i<n;i++ ){
+		r = sqrt(pow(x[i]-px,2)+pow(y[i]-py,2));
+		if( r>1e-6 ){
+			*fx += pmass*mass[i]/pow(r,2)*(x[i]-px)/r;
+			*fy += pmass*mass[i]/pow(r,2)*(y[i]-py)/r;
+		}
+	}
+}
 
 void force(NODE *head, double *x, double *y, double *mass, double *fx, double *fy, double theta, int n)
 {
@@ -72,12 +107,28 @@ void force(NODE *head, double *x, double *y, double *mass, double *fx, double *f
 		fx[i]=fy[i]=0;
 		pfx = &fx[i];
 		pfy = &fy[i];
-		cal_node(head,x[i],y[i],mass[i],pfx,pfy,theta);
+		//direct_nbody(x[i],y[i],mass[i],x,y,mass,n,pfx,pfy);
+		node_force(head,x[i],y[i],mass[i],pfx,pfy,theta);
 #ifdef DEBUG_force
 		cal_ana(x[i],y[i],mass[i],x,y,mass,n,*pfx,*pfy);
 #endif
 	}
-
-
-
 }// End of the function
+
+void potential( NODE *head, double *x, double *y, double *mass, double *V, double theta, int n)
+{
+	for( int i=0;i<n;i++ ){
+		V[i]=0;
+		node_potential(head,x[i],y[i],mass[i],&V[i],theta);
+	}
+}
+
+
+
+
+
+
+
+
+
+
