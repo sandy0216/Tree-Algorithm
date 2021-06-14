@@ -3,6 +3,7 @@
 #include "../inc/def_node.h"
 #include "../inc/print_tree.h"
 #include "../inc/tool_tree.h"
+#include "../inc/param.h"
 
 //#define DEBUG
 void add_particle(NODE *head, double x, double y, double mass)
@@ -56,7 +57,7 @@ void add_particle(NODE *head, double x, double y, double mass)
 }
 
 
-void create_tree(NODE *head, double *x, double *y, double *mass, const double boxsize, int n)
+void create_tree(NODE *head, double *x, double *y, double *mass, int n)
 {
 	create_node(head,boxsize/2,boxsize/2,x[0],y[0],mass[0],boxsize);
 	//print_tree(head);

@@ -1,4 +1,5 @@
 #include <cstdio>
+#include "../inc/param.h"
 
 
 void delete_par(double *x, double *y, double *mass, int index, int *n)
@@ -10,7 +11,7 @@ void delete_par(double *x, double *y, double *mass, int index, int *n)
 	}
 }
 
-void check_boundary(double *x,double *y,double *mass,int *n,double boxsize)
+void check_boundary(double *x,double *y,double *mass,int *n)
 {
 	int del=0;
 	for( int i=0;i<*n;i++ ){
@@ -31,7 +32,7 @@ void check_boundary(double *x,double *y,double *mass,int *n,double boxsize)
 	*n = *n-del;
 }
 
-void update(double *x, double *y, double *vx, double *vy, int n,double dt)
+void update(double *x, double *y, double *vx, double *vy, int n)
 {
 	for( int i=0;i<n;i++ ){
 		x[i] += vx[i]*dt;

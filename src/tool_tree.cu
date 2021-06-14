@@ -2,6 +2,7 @@
 #include <cstring>
 #include "../inc/def_node.h"
 #include "../inc/print_tree.h"
+#include "../inc/param.h"
 
 void create_node(NODE *head,double cx, double cy, double x, double y, double mass, double side)
 {
