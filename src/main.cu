@@ -4,6 +4,7 @@
 #include "../inc/init.h"
 #include "../inc/def_node.h"
 #include "../inc/create_tree.h"
+#include "../inc/create_tree_gpu.h"
 #include "../inc/force.h"
 #include "../inc/print_tree.h"
 #include "../inc/tool_main.h"
@@ -15,13 +16,17 @@ using namespace std;
 int main( int argc, char* argv[] )
 {
 	double *x, *y, *mass;
+	double *d_x, *d_y, *d_mass;
 	double *vx, *vy;
 	double *fx,*fy;
 	double *V;
 	double E,Ek;
 	double region = 80.0;  // restrict position of the initial particles
 	double maxmass = 100.0;
+
 	int    n  = initial_n;
+	int    *d_index;
+	int    *d_num;
 
 	double endtime = dt*1;
 
@@ -52,6 +57,58 @@ int main( int argc, char* argv[] )
 	}
 	fclose(initfile);
 	// End of creating intial conditions
+
+	//==================GPU settings==============================
+	/*int gid = 0;
+	if( cudaSetDevice(gid) != cudaSuccess ){
+		printf("!!! Cannot select GPU \n");
+		exit(1);
+	}
+	cudaSetDevice(gid);
+
+	int tx,ty; // Number of threads per block
+	tx = 4;
+	ty = 4;
+	if( tx*ty>1024 ){
+		printf("Number of threads per block must < 1024!!\n");
+		exit(0);
+	}
+	dim3 threads(tx,ty);
+	int bx,by; // Number of blocks per grid
+	bx = 4;
+	by = 4;
+	if( bx>65535 || by>65535 ){
+		printf("The grid size exceeds the limit!\n");
+		exit(0);
+	}
+	dim3 blocks(bx,by);
+
+	int n_thread = tx*ty;
+	int n_block  = bx*by;
+	int n_work   = n_thread*n_block;
+	
+	cudaMalloc((void**)&d_x, n*sizeof(double));
+	cudaMalloc((void**)&d_y, n*sizeof(double));
+	cudaMalloc((void**)&d_mass, n*sizeof(double));
+	cudaMalloc((void**)&d_index, n*sizeof(int));
+	
+	
+	cudaMemcpy( d_x, x, n*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy( d_y, y, n*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy( d_mass, mass, n*sizeof(double), cudaMemcpyHostToDevice);
+
+	split<<<blocks,threads>>>(d_x,d_y,d_mass);	
+	
+	
+	
+	
+	printf("well done\n");*/
+
+
+
+
+
+
 	
 	//=================Evolution===============================
 	double t=0.0;
