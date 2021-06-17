@@ -3,11 +3,13 @@ CUDIR   := /usr/local/nvidia
 CC      := g++
 CFLAGS  := -O3 -Wall
 NVCC    := nvcc
-NVFLAGS := -O3 -I$(CUDIR)/include -m64 -arch=compute_61 -code=sm_61 -Xptxas -v -rdc=true
-LIB     := -lcufft -lcudart
+#NVFLAGS := -O3 -I$(CUDIR)/include -m64 -arch=compute_61 -code=sm_61 -Xptxas -v -rdc=true -fopenmp
+
+LIB     := -lcufft -lcudart 
+NVFLAGS := -arch=compute_61 -code=sm_61,sm_61 -O3 -m64 --compiler-options -fno-strict-aliasing -DUNIX -ftz=true -prec-div=false -prec-sqrt=false -Xcompiler -fopenmp -rdc=true -lgsl -lgslcblas -lm
 
 TARGET := ./tree
-OBJ    := ./lib/init.o ./lib/print_tree.o ./lib/tool_tree.o ./lib/create_tree.o ./lib/create_tree_gpu.o ./lib/force.o ./lib/tool_main.o ./lib/main.o
+OBJ    := ./lib/heap.o ./lib/init.o ./lib/print_tree.o ./lib/tool_tree.o ./lib/tool_tree_gpu.o ./lib/create_tree.o ./lib/create_tree_gpu.o ./lib/force.o ./lib/tool_main.o ./lib/main.o
 
 $(TARGET):$(OBJ)
 	$(NVCC) $(OBJ) $(NVFLAGS) -o $(TARGET)
@@ -33,6 +35,9 @@ $(TARGET):$(OBJ)
 	$(NVCC) $(NVFLAGS) -c $< -o $@
 ./lib/tool_main.o : ./src/tool_main.cu
 	$(NVCC) $(NVFLAGS) -c $< -o $@
+./lib/heap.o : ./src/heap.cu
+	$(NVCC) $(NVFLAGS) -c $< -o $@
+
 
 #./lib/def_node.o : ./src/def_node.cu
 #	$(NVCC) $(NVFLAGS) -c $< -o $@

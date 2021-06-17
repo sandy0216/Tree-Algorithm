@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include <omp.h>
 #include "../inc/init.h"
 #include "../inc/def_node.h"
 #include "../inc/create_tree.h"
@@ -9,6 +10,8 @@
 #include "../inc/print_tree.h"
 #include "../inc/tool_main.h"
 #include "../inc/param.h"
+#include "../inc/heap.h"
+#include "../inc/cuapi.h"
 
 using namespace std;
 
@@ -16,7 +19,6 @@ using namespace std;
 int main( int argc, char* argv[] )
 {
 	double *x, *y, *mass;
-	double *d_x, *d_y, *d_mass;
 	double *vx, *vy;
 	double *fx,*fy;
 	double *V;
@@ -24,11 +26,13 @@ int main( int argc, char* argv[] )
 	double region = 80.0;  // restrict position of the initial particles
 	double maxmass = 100.0;
 
-	int    n  = initial_n;
-	int    *d_index;
-	int    *d_num;
+	unsigned long    n  = initial_n;
 
 	double endtime = dt*1;
+
+	cudaEvent_t start,stop;
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
 
 	x = (double *)malloc(n*sizeof(double));
 	y = (double *)malloc(n*sizeof(double));
@@ -59,50 +63,89 @@ int main( int argc, char* argv[] )
 	// End of creating intial conditions
 
 	//==================GPU settings==============================
-	/*int gid = 0;
+	int gid = 0;
 	if( cudaSetDevice(gid) != cudaSuccess ){
 		printf("!!! Cannot select GPU \n");
 		exit(1);
 	}
 	cudaSetDevice(gid);
 
-	int tx,ty; // Number of threads per block
-	tx = 4;
-	ty = 4;
 	if( tx*ty>1024 ){
 		printf("Number of threads per block must < 1024!!\n");
 		exit(0);
 	}
 	dim3 threads(tx,ty);
-	int bx,by; // Number of blocks per grid
-	bx = 4;
-	by = 4;
 	if( bx>65535 || by>65535 ){
 		printf("The grid size exceeds the limit!\n");
 		exit(0);
 	}
 	dim3 blocks(bx,by);
 
-	int n_thread = tx*ty;
-	int n_block  = bx*by;
-	int n_work   = n_thread*n_block;
-	
+	// Set basic parameters of GPU
+	int   *d_side,*d_n;
+	cudaMalloc((void**)&d_side, sizeof(int));
+	cudaMalloc((void**)&d_n, sizeof(int));
+	cudaMemcpy(d_side, &nx, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_n, &n, sizeof(int), cudaMemcpyHostToDevice);
+
+	double *d_boxsize;
+	cudaMalloc((void**)&d_boxsize, sizeof(double));
+	cudaMemcpy(d_boxsize, &boxsize, sizeof(double), cudaMemcpyHostToDevice);
+
+	double *d_x,*d_y,*d_mass;
 	cudaMalloc((void**)&d_x, n*sizeof(double));
 	cudaMalloc((void**)&d_y, n*sizeof(double));
 	cudaMalloc((void**)&d_mass, n*sizeof(double));
-	cudaMalloc((void**)&d_index, n*sizeof(int));
-	
-	
-	cudaMemcpy( d_x, x, n*sizeof(double), cudaMemcpyHostToDevice);
-	cudaMemcpy( d_y, y, n*sizeof(double), cudaMemcpyHostToDevice);
-	cudaMemcpy( d_mass, mass, n*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_x, x, n*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_y, y, n*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_mass, mass, n*sizeof(double), cudaMemcpyHostToDevice);
 
-	split<<<blocks,threads>>>(d_x,d_y,d_mass);	
+	// Split the particle into different subregion
+	// Record the region index of each particle
+	int *index, *d_index;   
+	index = (int *)malloc(n*sizeof(int));
+	cudaMalloc((void**)&d_index, n*sizeof(int));	
+	// Record number of particle in each region
+	unsigned int *regnum, *d_regnum;      
+	regnum   = (unsigned int *)malloc(n_work*sizeof(unsigned int));
+	cudaMalloc((void**)&d_regnum, n_work*sizeof(unsigned int));
+	for( int i=0;i<n_work;i++ ){ regnum[i]=0; }
+	cudaMemcpy(d_regnum, regnum, n_work*sizeof(unsigned int), cudaMemcpyHostToDevice);
+	// Call kernel function :
+	// Input  : parameters, postion fo the particles
+	// Output : region index of each particles, number of particles in each region
+	split<<<threads,blocks>>>(d_x,d_y,d_index,d_regnum,d_n,d_side,d_boxsize);
+	cudaMemcpy(regnum,d_regnum,n_work*sizeof(unsigned int),cudaMemcpyDeviceToHost);
+	cudaMemcpy(index,d_index,n*sizeof(int),cudaMemcpyDeviceToHost);
 	
+	// Cumsum of the # of particle in each region
+	for( int i=1;i<n_work;i++ ){
+		regnum[i] += regnum[i-1];
+	}
+	cudaMemcpy(d_regnum,regnum,n_work*sizeof(unsigned int), cudaMemcpyHostToDevice);
 	
-	
-	
-	printf("well done\n");*/
+	// Sort the particle by the region index
+	int *particle_index,*d_particle_index;
+	particle_index = (int *)malloc(n*sizeof(int));
+	cudaMalloc((void**)&d_particle_index,n*sizeof(int));
+	for( int i=0;i<n;i++ ){
+		particle_index[i] = i;
+	}
+	HeapSort(index,particle_index,n);
+	cudaMemcpy(d_particle_index,particle_index,n*sizeof(int),cudaMemcpyHostToDevice);
+
+
+	// Define GPU parameters
+	NODE *p_local_node;
+	p_local_node = (NODE *)malloc(n_work*sizeof(NODE));
+	NODE *d_local_node;
+	cudaMalloc((void**)&d_local_node, n_work*sizeof(NODE));
+
+	tree<<<threads,blocks>>>(d_x,d_y,d_mass,d_particle_index,d_regnum,d_n,d_side,d_boxsize,d_local_node);
+	//cudaMemcpy(p_local_node,d_local_node, n_work*sizeof(NODE), cudaMemcpyDeviceToHost);
+
+
+	printf("well done\n");
 
 
 
@@ -111,7 +154,7 @@ int main( int argc, char* argv[] )
 
 	
 	//=================Evolution===============================
-	double t=0.0;
+	/*double t=0.0;
 	int step=0;
 	int file=0;
 	
@@ -205,7 +248,7 @@ int main( int argc, char* argv[] )
 		// Move to next step
 		t = t+dt;
 		step = step+1;
-	}
+	}*/
 	
 
 	return 0;

@@ -8,7 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 
-void init( double *x, double *y, double *mass, const int n, const double region, const double boxsize, const double maxmass)
+void init( double *x, double *y, double *mass, const unsigned long n, const double region, const double boxsize, const double maxmass)
 {
 	for( long i=0;i<n;i++ ){
 		x[i] = (double) rand()/(float)RAND_MAX*region+boxsize/2-region/2;

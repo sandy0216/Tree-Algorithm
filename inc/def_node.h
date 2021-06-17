@@ -1,3 +1,6 @@
+#include <vector>
+
+using namespace std;
 
 struct NODE{
 	double 	center[2];
@@ -6,8 +9,19 @@ struct NODE{
 	double 	side;
 	int 	num;
 	int 	leaf;
-	NODE *next[4];//={next1,next2,next3,next4};
-	//NODE *next2;
-	//NODE *next3;
-	//NODE *next4;
+	NODE *next[4];
+};
+
+struct LOCAL{
+	vector<double> x;
+	vector<double> y;
+	vector<double> mass;
+	int num;
+};
+
+struct REG{
+	double *x;
+	double *y;
+	double *mass;
+	int num;
 };
