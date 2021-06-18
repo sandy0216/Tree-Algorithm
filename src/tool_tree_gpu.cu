@@ -28,9 +28,9 @@ __device__ int region_gpu(double x, double y, double cx, double cy){
 	return 5;
 }
 
-__device__ void finest_grid_gpup(NODE *current, double x, double y, double mass);
+__device__ void finest_grid_gpup(NODE *current, double x, double y, double mass,int *flag);
 
-__device__ void finest_grid_gpu(NODE *current, double x, double y, double mass)
+__device__ void finest_grid_gpu(NODE *current, double x, double y, double mass,int *flag)
 {
 	double cxs[4],cys[4];
 	double cx,cy,cmx,cmy,side,m;
@@ -79,7 +79,7 @@ __device__ void finest_grid_gpu(NODE *current, double x, double y, double mass)
 		reg = region_gpu(x,y,cx,cy);
 		if( current->next[reg]!=NULL ){
 			//printf("oh no\n");
-			finest_grid_gpup(current->next[reg],x,y,mass);
+			finest_grid_gpup(current->next[reg],x,y,mass,flag);
 		}else{
 			nextnode = new NODE();
 			current->next[reg] = nextnode;
@@ -90,7 +90,7 @@ __device__ void finest_grid_gpu(NODE *current, double x, double y, double mass)
 }//end of function
 
 
-__device__ void finest_grid_gpup(NODE *current, double x, double y, double mass)
+__device__ void finest_grid_gpup(NODE *current, double x, double y, double mass,int *flag)
 {
 	double cxs[4],cys[4];
 	double cx,cy,cmx,cmy,side,m;
@@ -139,7 +139,7 @@ __device__ void finest_grid_gpup(NODE *current, double x, double y, double mass)
 		reg = region_gpu(x,y,cx,cy);
 		if( current->next[reg]!=NULL ){
 			//printf("oh no\n");
-			finest_grid_gpu(current->next[reg],x,y,mass);
+			finest_grid_gpu(current->next[reg],x,y,mass,flag);
 		}else{
 			nextnode = new NODE();
 			current->next[reg] = nextnode;
@@ -152,7 +152,7 @@ __device__ void finest_grid_gpup(NODE *current, double x, double y, double mass)
 
 
 
-__device__ void add_particle_gpu(NODE *head, double x, double y, double mass)
+__device__ void add_particle_gpu(NODE *head, double x, double y, double mass,int *flag)
 {
 	NODE *current = head;
 	NODE *temp;
@@ -190,7 +190,7 @@ __device__ void add_particle_gpu(NODE *head, double x, double y, double mass)
 				current = current->next[reg];
 			}
 		}else{	//reach the smallest grid which contains only one particle
-			finest_grid_gpu(current,x,y,mass);	
+			finest_grid_gpu(current,x,y,mass,flag);	
 			break;
 		}//End of if-else while reaching the smallest grid
 		

@@ -22,7 +22,7 @@ void print_tree(NODE *head)
 		}
 		printf("====end of this tree====\n");
 	}else{
-		//printf("No nodes inside\n");
+		printf("No nodes inside\n");
 	}
 }
 

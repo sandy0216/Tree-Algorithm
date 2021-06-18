@@ -23,7 +23,7 @@ int main( int argc, char* argv[] )
 	double *fx,*fy;
 	double *V;
 	double E,Ek;
-	double region = 80.0;  // restrict position of the initial particles
+	double region = 100.0;  // restrict position of the initial particles
 	double maxmass = 100.0;
 
 	unsigned long    n  = initial_n;
@@ -120,6 +120,7 @@ int main( int argc, char* argv[] )
 	
 	// Cumsum of the # of particle in each region
 	for( int i=1;i<n_work;i++ ){
+		//printf("Region %d, %d particles\n",i,regnum[i]);
 		regnum[i] += regnum[i-1];
 	}
 	cudaMemcpy(d_regnum,regnum,n_work*sizeof(unsigned int), cudaMemcpyHostToDevice);
@@ -141,11 +142,48 @@ int main( int argc, char* argv[] )
 	NODE *d_local_node;
 	cudaMalloc((void**)&d_local_node, n_work*sizeof(NODE));
 
-	tree<<<threads,blocks>>>(d_x,d_y,d_mass,d_particle_index,d_regnum,d_n,d_side,d_boxsize,d_local_node);
-	//cudaMemcpy(p_local_node,d_local_node, n_work*sizeof(NODE), cudaMemcpyDeviceToHost);
+	/*for( int i=0;i<n_work;i++ ){
+		p_local_node[i]=NULL;
+		printf("Region:%d\n",i);
+		print_tree(p_local_node[i]);
+	}*/
+	/*int localn,pid,st;
+	printf("Region\tPartnum\tx position\n");
+	for( int i=0;i<n_work;i++ ){
+		if( i==0 ){ 
+			localn=regnum[i]; 
+			st = 0;
+		}else{
+		       	localn = regnum[i]-regnum[i-1];
+			st = regnum[i-1];      
+		}
+		printf("%d\t%d\t",i,regnum[i]-regnum[i-1]);
+		for( int j=0;j<localn;j++ ){
+			pid = st+j;
+			printf("%d,",pid);
+		}
+		printf("\n");
+	}
+	printf("finish\n");*/
+	int *d_flag,*flag;
+	cudaMalloc((void**)&d_flag, n_work*sizeof(int));	
+	flag = (int *)malloc(n_work*sizeof(int));
 
+	tree<<<threads,blocks>>>(d_x,d_y,d_mass,d_particle_index,d_regnum,d_n,d_side,d_boxsize,d_local_node,d_flag);
+	cudaMemcpy(p_local_node,d_local_node, n_work*sizeof(NODE), cudaMemcpyDeviceToHost);
+	cudaMemcpy(flag,d_flag,n_work*sizeof(int),cudaMemcpyDeviceToHost);
+	//bool check;
+	//check = CUDA_CHECK_ERROR(CUDA_FUNCTION(tree));
+	//printf("%d\n",check);
+	printf("Region\tparticle num\t,particle cal\t,center\t,centerofmass\n");
+	NODE *head;
+	for( int i=1;i<n_work;i++ ){
+		head = &p_local_node[i];
+		printf("%d\t%d\t%d\t%d\n",i, regnum[i]-regnum[i-1],flag[i],head->num);
+	}	
 
 	printf("well done\n");
+
 
 
 
