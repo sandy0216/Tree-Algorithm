@@ -24,7 +24,7 @@ __global__ void split(double *x, double *y, int *index, unsigned int *regnum, in
 }
 
 
-__global__ void tree(double *x, double *y, double *mass, int *particle_index , unsigned int *regnum, int *n, int *side, double* boxsize, NODE *local,int* flag)
+__global__ void tree(double *x, double *y, double *mass, int *particle_index , unsigned int *regnum, int *n, int *side, double* boxsize, NODE *local,int *region_index, int *thread_load, int* flag)
 {
 	int nx = blockDim.x*gridDim.x;
 	int ny = blockDim.y*gridDim.y;
@@ -32,29 +32,32 @@ __global__ void tree(double *x, double *y, double *mass, int *particle_index , u
 	int iy = blockDim.y*blockIdx.y + threadIdx.y;
 	int thread_id = ix+iy*nx;
 	NODE  *root,*copy;
-	int localn;
+	int localn;		// Number of particles in each region
 	int start, pindex;
-	int n_work = (*side)*(*side);	
 	int a,b;
+	int region_id;
 	double length = *boxsize/(*side);
-	while( thread_id<n_work ){
-		root = new NODE(); //&local[thread_id];
-		if( thread_id==0 ){ localn = regnum[thread_id]; }
-		else{ localn = regnum[thread_id]-regnum[thread_id-1]; }
-		
-		a = thread_id%(*side);
-		b = thread_id/(*side);
-		if( localn!= 0 ){
-			if( thread_id==0 ){ start=0; }
-			else{ start=regnum[thread_id-1]; }
-			a = thread_id%(*side);
-			b = thread_id/(*side);
+	int start_r;
+	if( thread_id==0 ){ start_r = 0;            }
+	else{	start_r = thread_load[thread_id-1]; }
+	flag[ix+iy*nx] = 0;
+	for( int i=start_r;i<thread_load[thread_id];i++ ){
+		root = new NODE();
+		region_id = region_index[i];
+		if( region_id==0 ){ localn = regnum[region_id]; }
+		else{ localn = regnum[region_id]-regnum[region_id-1]; }
+		a = region_id%(*side);
+		b = region_id/(*side);
+		if( localn!= 0 ){ // If there do exist particle in a region
+			if( region_id==0 ){ start=0; }
+			else{ start=regnum[region_id-1]; }
 			pindex = particle_index[start];
 			create_node_gpu(root,length*((double)a+0.5),length*((double)b+0.5),x[pindex],y[pindex],mass[pindex],length);
-			if( localn>1 ){
-				for( int i=1;i<localn;i++ ){
-					pindex = particle_index[start+i];
-					add_particle_gpu(root,x[pindex],y[pindex],mass[pindex],&flag[thread_id]);
+			flag[ix+iy*nx] += 1;
+			if( localn>1 ){ // if there are more than one particle in the region
+				for( int j=1;j<localn;j++ ){
+					pindex = particle_index[start+j];
+					add_particle_gpu(root,x[pindex],y[pindex],mass[pindex],&flag[ix+iy*nx]);
 				}
 			}
 		}else{
@@ -67,15 +70,8 @@ __global__ void tree(double *x, double *y, double *mass, int *particle_index , u
 				root->next[i] = NULL;
 			}
 		}
-		copy = &local[thread_id];
-		copy->center[0] = root->center[0];
-		copy->center[1] = root->center[1];
-		copy->side = root->side;
-		copy->num  = root->num;
-		copy->leaf = root->leaf;
-		copy->centerofmass[0] = root->centerofmass[0];
-		copy->centerofmass[1] = root->centerofmass[1];
-		thread_id += nx*ny;
+		copy = &local[region_id];
+		copy->num = root->num;
 	}
 }
 	

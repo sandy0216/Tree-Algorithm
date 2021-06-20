@@ -12,16 +12,11 @@ struct NODE{
 	NODE *next[4];
 };
 
-struct LOCAL{
-	vector<double> x;
-	vector<double> y;
-	vector<double> mass;
+struct GNODE{
+	float centerofmass[2];
+	float  mass;
+	float side;
 	int num;
-};
-
-struct REG{
-	double *x;
-	double *y;
-	double *mass;
-	int num;
+	int leaf;
+	GNODE *next[4];
 };

@@ -12,6 +12,7 @@
 #include "../inc/param.h"
 #include "../inc/heap.h"
 #include "../inc/cuapi.h"
+#include "../inc/merge_tree_gpu.h"
 
 using namespace std;
 
@@ -23,7 +24,7 @@ int main( int argc, char* argv[] )
 	double *fx,*fy;
 	double *V;
 	double E,Ek;
-	double region = 100.0;  // restrict position of the initial particles
+	double region = 80.0;  // restrict position of the initial particles
 	double maxmass = 100.0;
 
 	unsigned long    n  = initial_n;
@@ -105,19 +106,71 @@ int main( int argc, char* argv[] )
 	int *index, *d_index;   
 	index = (int *)malloc(n*sizeof(int));
 	cudaMalloc((void**)&d_index, n*sizeof(int));	
+	
 	// Record number of particle in each region
 	unsigned int *regnum, *d_regnum;      
 	regnum   = (unsigned int *)malloc(n_work*sizeof(unsigned int));
 	cudaMalloc((void**)&d_regnum, n_work*sizeof(unsigned int));
 	for( int i=0;i<n_work;i++ ){ regnum[i]=0; }
 	cudaMemcpy(d_regnum, regnum, n_work*sizeof(unsigned int), cudaMemcpyHostToDevice);
+	
 	// Call kernel function :
 	// Input  : parameters, postion fo the particles
 	// Output : region index of each particles, number of particles in each region
 	split<<<threads,blocks>>>(d_x,d_y,d_index,d_regnum,d_n,d_side,d_boxsize);
 	cudaMemcpy(regnum,d_regnum,n_work*sizeof(unsigned int),cudaMemcpyDeviceToHost);
 	cudaMemcpy(index,d_index,n*sizeof(int),cudaMemcpyDeviceToHost);
-	
+
+	// =============================Do Load Balance=================================
+	// Define region index
+	int *region_index,*d_region_index,*thread_load,*d_thread_load;
+	region_index = (int *)malloc(n_work*sizeof(int));	// Order of the region
+	thread_load = (int *)malloc(n_thread*sizeof(int));  	// How many region for each thread
+	cudaMalloc((void**)&d_region_index,n_work*sizeof(int));
+	cudaMalloc((void**)&d_thread_load,n_thread*sizeof(int));
+	int which_region=0;
+	int which_thread=0;
+	int rx,ry;
+	int current_thread_load = 0;
+	//printf("expect load=%d\n",n/n_thread);
+	for( int i=0;i<n_thread;i++ ){ thread_load[i]=0; }
+	for( int i=0;i<nx/2;i++ ){
+	for( int j=0;j<ny/2;j++ ){
+	for( int k=0;k<4;k++ ){
+		rx = 2*i;
+		ry = 2*j;
+		if( k==1 || k==3 ){ rx += 1; }
+		if( k==2 || k==3 ){ ry += 1; }
+		region_index[which_region]=rx+nx*ry;
+		which_region += 1;
+		current_thread_load += regnum[rx+nx*ry];
+		thread_load[which_thread]+= 1;
+		//printf("Adding to thread %d for %d particles, current=%d\n",which_thread,regnum[rx+nx*ry],thread_load[which_thread]);
+		if( current_thread_load>n/n_thread-regnum[rx+nx*ry]/4 && which_thread<n_thread-1 ){ 
+			which_thread += 1;  //divided by 3 is a tricky thing here
+			current_thread_load = 0;
+		}
+		if( current_thread_load>n/n_thread*2 ){
+			printf("Load no balance!!!\n");
+			exit(1);
+		}
+	}
+	}
+	}
+	int check = 0;
+	for( int i=1;i<n_thread;i++ ){
+		check += thread_load[i];
+		thread_load[i] += thread_load[i-1];
+	}
+	if( check+thread_load[0] != n_work ){
+		printf("Error no load balance!!!\n");
+		exit(1);
+	}
+	cudaMemcpy(d_region_index,region_index,n_work*sizeof(int),cudaMemcpyHostToDevice);
+	cudaMemcpy(d_thread_load,thread_load,n_thread*sizeof(int),cudaMemcpyHostToDevice);
+	// =====================End of Load Balance===========================
+		
+		
 	// Cumsum of the # of particle in each region
 	for( int i=1;i<n_work;i++ ){
 		//printf("Region %d, %d particles\n",i,regnum[i]);
@@ -134,7 +187,6 @@ int main( int argc, char* argv[] )
 	}
 	HeapSort(index,particle_index,n);
 	cudaMemcpy(d_particle_index,particle_index,n*sizeof(int),cudaMemcpyHostToDevice);
-
 
 	// Define GPU parameters
 	NODE *p_local_node;
@@ -165,24 +217,34 @@ int main( int argc, char* argv[] )
 		printf("\n");
 	}
 	printf("finish\n");*/
-	int *d_flag,*flag;
-	cudaMalloc((void**)&d_flag, n_work*sizeof(int));	
-	flag = (int *)malloc(n_work*sizeof(int));
 
-	tree<<<threads,blocks>>>(d_x,d_y,d_mass,d_particle_index,d_regnum,d_n,d_side,d_boxsize,d_local_node,d_flag);
+	
+	int *d_flag,*flag;
+	cudaMalloc((void**)&d_flag, n_thread*sizeof(int));	
+	flag = (int *)malloc(n_thread*sizeof(int));
+
+	merge_gpu<<<threads,blocks>>>(d_x,d_y,d_mass,d_particle_index,d_regnum,d_n,d_side,d_boxsize,d_local_node,d_region_index,d_thread_load,d_flag);
 	cudaMemcpy(p_local_node,d_local_node, n_work*sizeof(NODE), cudaMemcpyDeviceToHost);
-	cudaMemcpy(flag,d_flag,n_work*sizeof(int),cudaMemcpyDeviceToHost);
+	cudaMemcpy(flag,d_flag,n_thread*sizeof(int),cudaMemcpyDeviceToHost);
 	//bool check;
 	//check = CUDA_CHECK_ERROR(CUDA_FUNCTION(tree));
 	//printf("%d\n",check);
-	printf("Region\tparticle num\t,particle cal\t,center\t,centerofmass\n");
-	NODE *head;
+	/*NODE *head;
 	for( int i=1;i<n_work;i++ ){
 		head = &p_local_node[i];
-		printf("%d\t%d\t%d\t%d\n",i, regnum[i]-regnum[i-1],flag[i],head->num);
-	}	
-
+		printf("%d\t%d\t%d\n",i, regnum[i]-regnum[i-1],head->num);
+	}*/
+	/*int total=flag[0];	
+	for( int i=1;i<n_work;i++ ){
+		printf("region id=%d, GPU=%d, CPU=%d, xcm=%.3f\n",i,p_local_node[i].num,regnum[i]-regnum[i-1],p_local_node[i].centerofmass[0]);
+	}*/
+	for( int i=1;i<n_thread;i++ ){
+		printf("thread id=%d, load = %d\n",i,thread_load[i]-thread_load[i-1]);
+	}
+	printf("%d\n",thread_load[n_thread-1]);
 	printf("well done\n");
+	printf("size of NODE = %d\n",sizeof(NODE));
+	printf("size of GNODE = %d\n",sizeof(GNODE));
 
 
 

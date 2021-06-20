@@ -66,6 +66,7 @@ __device__ void finest_grid_gpu(NODE *current, double x, double y, double mass,i
 			nextnode = new NODE();
 			current->next[reg] = nextnode;
 			create_node_gpu(current->next[reg],cxs[reg],cys[reg],cmx,cmy,m,side/2);
+			*flag += 1;
 		}
 			
 		//update information of current grid
@@ -84,6 +85,7 @@ __device__ void finest_grid_gpu(NODE *current, double x, double y, double mass,i
 			nextnode = new NODE();
 			current->next[reg] = nextnode;
 			create_node_gpu(current->next[reg],cxs[reg],cys[reg],x,y,mass,side/2);
+			*flag += 1;
 //			if( current == NULL ){ printf("Creation of subnode failed.\n"); }
 		}
 	}//end of if
@@ -126,6 +128,7 @@ __device__ void finest_grid_gpup(NODE *current, double x, double y, double mass,
 			nextnode = new NODE();
 			current->next[reg] = nextnode;
 			create_node_gpu(current->next[reg],cxs[reg],cys[reg],cmx,cmy,m,side/2);
+			*flag += 1;
 		}
 			
 		//update information of current grid
@@ -144,6 +147,7 @@ __device__ void finest_grid_gpup(NODE *current, double x, double y, double mass,
 			nextnode = new NODE();
 			current->next[reg] = nextnode;
 			create_node_gpu(current->next[reg],cxs[reg],cys[reg],x,y,mass,side/2);
+			*flag += 1;
 //			if( current == NULL ){ printf("Creation of subnode failed.\n"); }
 		}
 	}//end of if
@@ -185,6 +189,7 @@ __device__ void add_particle_gpu(NODE *head, double x, double y, double mass,int
 				temp = new NODE();
 				current->next[reg] = temp;
 				create_node_gpu(temp,cxs[reg],cys[reg],x,y,mass,side/2);
+				*flag += 1;
 				break;
 			}else{
 				current = current->next[reg];
