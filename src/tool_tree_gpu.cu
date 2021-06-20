@@ -1,9 +1,9 @@
 #include "../inc/def_node.h"
 
-__device__ void create_node_gpu(NODE *head,double cx, double cy, double x, double y, double mass, double side)
+__device__ void create_node_gpu(NODE *head, double cx, double cy, double x, double y, double mass, double side)
 {
-	head->center[0]       = cx;
-	head->center[1]       = cy;
+	head->center[0] = cx;
+	head->center[1] = cy;
 	head->centerofmass[0] = x;
 	head->centerofmass[1] = y;
 	head->mass = mass;

@@ -6,7 +6,7 @@
 #include "../inc/tool_tree_gpu.h"
 #include "../inc/param.h"
 
-__global__ void split(double *x, double *y, int *index, unsigned int *regnum, int *n, int *side, double *boxsize)
+__global__ void split(double *x, double *y, int *index, unsigned int *regnum, int *n)
 {
 	int nx = blockDim.x*gridDim.x;
 	int ny = blockDim.y*gridDim.y;
@@ -15,10 +15,10 @@ __global__ void split(double *x, double *y, int *index, unsigned int *regnum, in
 	int thread_id = ix+iy*nx;
 	int a,b;
 	while( thread_id<*n ){
-		a = x[thread_id]/(*boxsize/ *side);
-		b = y[thread_id]/(*boxsize/ *side);
-		index[thread_id] = a+b*(*side);
-		atomicAdd(&regnum[a+b*(*side)],1);
+		a = x[thread_id]/(d_boxsize/ d_side);
+		b = y[thread_id]/(d_boxsize/ d_side);
+		index[thread_id] = a+b*(d_side);
+		atomicAdd(&regnum[a+b*(d_side)],1);
 		thread_id += nx*ny;
 	}
 }
@@ -75,14 +75,20 @@ __global__ void tree(double *x, double *y, double *mass, int *particle_index , u
 	}
 }
 	
-/*__global__ merge_gpu(NODE *local)
+__global__ void merge_tree(double *x, double *y, double *mass, int* flag)
 {
 	int nx = blockDim.x*gridDim.x;
 	int ny = blockDim.y*gridDim.y;
 	int ix = blockDim.x*blockIdx.x + threadIdx.x;
 	int iy = blockDim.y*blockIdx.y + threadIdx.y;
 	int thread_id = ix+iy*nx;
-	NODE  *root;
-
-
-}*/
+	double length=d_boxsize/(double)d_side;
+	if( thread_id == 0 ){
+		NODE  *root;
+		root = new NODE();
+		create_node_gpu(root,d_boxsize/2,d_boxsize/2,x[0],y[0],mass[0],length);
+		for( int i=0;i<10;i++ ){
+			add_particle_gpu(root,x[i],y[i],mass[i],&flag[i]);
+		}
+	}
+}

@@ -16,6 +16,16 @@
 
 using namespace std;
 
+__device__ double d_boxsize;
+__device__ double d_theta;
+__device__ double d_eplison;
+__device__ double d_dt;
+__device__ int d_n_work;
+__device__ int d_n_thread;
+__device__ int d_side;// =nx=ny
+__device__ int dn_gnode;
+
+
 
 int main( int argc, char* argv[] )
 {
@@ -24,13 +34,14 @@ int main( int argc, char* argv[] )
 	double *fx,*fy;
 	double *V;
 	double E,Ek;
-	double region = 80.0;  // restrict position of the initial particles
+	double region = 100.0;  // restrict position of the initial particles
 	double maxmass = 100.0;
 
 	unsigned long    n  = initial_n;
 
 	double endtime = dt*1;
 
+	float testtime;
 	cudaEvent_t start,stop;
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
@@ -54,13 +65,13 @@ int main( int argc, char* argv[] )
 	printf("Finsih creating initial condition...\n");
 	
 	// Record the initial conditions
-	FILE *initfile;
+	/*FILE *initfile;
 	initfile = fopen("./input/init.dat","w");
 	fprintf(initfile, "index\tx\ty\tmass\n");
 	for( int i=0;i<n;i++ ){
 		fprintf(initfile, "%d\t%.3f\t%.3f\t%.3f\n",i,x[i],y[i],mass[i]);
 	}
-	fclose(initfile);
+	fclose(initfile);*/
 	// End of creating intial conditions
 
 	//==================GPU settings==============================
@@ -83,15 +94,15 @@ int main( int argc, char* argv[] )
 	dim3 blocks(bx,by);
 
 	// Set basic parameters of GPU
-	int   *d_side,*d_n;
-	cudaMalloc((void**)&d_side, sizeof(int));
-	cudaMalloc((void**)&d_n, sizeof(int));
-	cudaMemcpy(d_side, &nx, sizeof(int), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_n, &n, sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol( d_boxsize, &boxsize, sizeof(double));
+	cudaMemcpyToSymbol( d_side, &nx, sizeof(int));
+	cudaMemcpyToSymbol( d_n_work, &n_work, sizeof(int));
+	cudaMemcpyToSymbol( d_n_thread, &n_thread, sizeof(int));
+	
 
-	double *d_boxsize;
-	cudaMalloc((void**)&d_boxsize, sizeof(double));
-	cudaMemcpy(d_boxsize, &boxsize, sizeof(double), cudaMemcpyHostToDevice);
+	int   *d_n;
+	cudaMalloc((void**)&d_n, sizeof(int));
+	cudaMemcpy(d_n, &n, sizeof(int), cudaMemcpyHostToDevice);
 
 	double *d_x,*d_y,*d_mass;
 	cudaMalloc((void**)&d_x, n*sizeof(double));
@@ -117,11 +128,17 @@ int main( int argc, char* argv[] )
 	// Call kernel function :
 	// Input  : parameters, postion fo the particles
 	// Output : region index of each particles, number of particles in each region
-	split<<<threads,blocks>>>(d_x,d_y,d_index,d_regnum,d_n,d_side,d_boxsize);
+	cudaEventRecord(start,0);
+	split<<<threads,blocks>>>(d_x,d_y,d_index,d_regnum,d_n);
 	cudaMemcpy(regnum,d_regnum,n_work*sizeof(unsigned int),cudaMemcpyDeviceToHost);
 	cudaMemcpy(index,d_index,n*sizeof(int),cudaMemcpyDeviceToHost);
+	cudaEventRecord(stop,0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&testtime, start, stop);
+	printf("Split&copy out the result takes %.3e(ms)\n",testtime);
 
 	// =============================Do Load Balance=================================
+	cudaEventRecord(start,0);
 	// Define region index
 	int *region_index,*d_region_index,*thread_load,*d_thread_load;
 	region_index = (int *)malloc(n_work*sizeof(int));	// Order of the region
@@ -130,24 +147,18 @@ int main( int argc, char* argv[] )
 	cudaMalloc((void**)&d_thread_load,n_thread*sizeof(int));
 	int which_region=0;
 	int which_thread=0;
-	int rx,ry;
+	int reg_id;
 	int current_thread_load = 0;
+	block(nx,0,0,region_index,&which_region);
 	//printf("expect load=%d\n",n/n_thread);
 	for( int i=0;i<n_thread;i++ ){ thread_load[i]=0; }
-	for( int i=0;i<nx/2;i++ ){
-	for( int j=0;j<ny/2;j++ ){
-	for( int k=0;k<4;k++ ){
-		rx = 2*i;
-		ry = 2*j;
-		if( k==1 || k==3 ){ rx += 1; }
-		if( k==2 || k==3 ){ ry += 1; }
-		region_index[which_region]=rx+nx*ry;
-		which_region += 1;
-		current_thread_load += regnum[rx+nx*ry];
-		thread_load[which_thread]+= 1;
-		//printf("Adding to thread %d for %d particles, current=%d\n",which_thread,regnum[rx+nx*ry],thread_load[which_thread]);
-		if( current_thread_load>n/n_thread-regnum[rx+nx*ry]/4 && which_thread<n_thread-1 ){ 
-			which_thread += 1;  //divided by 3 is a tricky thing here
+	for( int i=0;i<n_work;i++ ){
+		reg_id = region_index[i];
+		current_thread_load += regnum[reg_id];
+		thread_load[which_thread] += 1;
+		if( current_thread_load>n/n_thread-regnum[reg_id]/4 && which_thread<n_thread-1 ){
+			//printf("thread %d, load %d, take %d region\n",which_thread,current_thread_load,thread_load[which_thread]);
+			which_thread+=1;
 			current_thread_load = 0;
 		}
 		if( current_thread_load>n/n_thread*2 ){
@@ -155,8 +166,7 @@ int main( int argc, char* argv[] )
 			exit(1);
 		}
 	}
-	}
-	}
+
 	int check = 0;
 	for( int i=1;i<n_thread;i++ ){
 		check += thread_load[i];
@@ -166,10 +176,14 @@ int main( int argc, char* argv[] )
 		printf("Error no load balance!!!\n");
 		exit(1);
 	}
+	
 	cudaMemcpy(d_region_index,region_index,n_work*sizeof(int),cudaMemcpyHostToDevice);
 	cudaMemcpy(d_thread_load,thread_load,n_thread*sizeof(int),cudaMemcpyHostToDevice);
 	// =====================End of Load Balance===========================
-		
+	cudaEventRecord(stop,0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&testtime, start, stop);
+	printf("Load balance&copy the result takes %.3e(ms)\n",time);	
 		
 	// Cumsum of the # of particle in each region
 	for( int i=1;i<n_work;i++ ){
@@ -193,39 +207,59 @@ int main( int argc, char* argv[] )
 	p_local_node = (NODE *)malloc(n_work*sizeof(NODE));
 	NODE *d_local_node;
 	cudaMalloc((void**)&d_local_node, n_work*sizeof(NODE));
+	NODE *node_ly1;
+	node_ly1 = (NODE *)malloc(n_work/4*sizeof(NODE));
+	NODE *d_node_ly1;
+	cudaMalloc((void**)&d_node_ly1, n_work/4*sizeof(NODE));
 
-	/*for( int i=0;i<n_work;i++ ){
-		p_local_node[i]=NULL;
-		printf("Region:%d\n",i);
-		print_tree(p_local_node[i]);
-	}*/
-	/*int localn,pid,st;
-	printf("Region\tPartnum\tx position\n");
-	for( int i=0;i<n_work;i++ ){
-		if( i==0 ){ 
-			localn=regnum[i]; 
-			st = 0;
-		}else{
-		       	localn = regnum[i]-regnum[i-1];
-			st = regnum[i-1];      
-		}
-		printf("%d\t%d\t",i,regnum[i]-regnum[i-1]);
-		for( int j=0;j<localn;j++ ){
-			pid = st+j;
-			printf("%d,",pid);
-		}
-		printf("\n");
-	}
-	printf("finish\n");*/
+	// Treat the particles in each region as a new particle
+	double *rx, *ry, *rmass, *d_rx, *d_ry, *d_rmass;
+	int *rn, *d_rn;
+	rx = (double *)malloc(n_work*sizeof(double));
+	ry = (double *)malloc(n_work*sizeof(double));
+	rmass = (double *)malloc(n_work*sizeof(double));
+	rn = (int *)malloc(n_work*sizeof(int));
+	cudaMalloc((void**)&d_rx, n_work*sizeof(double));
+	cudaMalloc((void**)&d_ry, n_work*sizeof(double));
+	cudaMalloc((void**)&d_rmass, n_work*sizeof(double));
+	cudaMalloc((void**)&d_rn, n_work*sizeof(int));
 
+	int n_gnode = (pow(nx/bx,2)-1)*4/3+1;
+	cudaMemcpyToSymbol( dn_gnode, &n_gnode, sizeof(int));
 	
 	int *d_flag,*flag;
-	cudaMalloc((void**)&d_flag, n_thread*sizeof(int));	
-	flag = (int *)malloc(n_thread*sizeof(int));
+	cudaMalloc((void**)&d_flag, n_gnode*sizeof(int));
+	flag = (int *)malloc(n_gnode*sizeof(int));
+	for( int i=0;i<n_gnode;i++ ){ flag[i]=0; }
+	cudaMemcpy(d_flag,flag,n_gnode*sizeof(int),cudaMemcpyHostToDevice);
+	
+	printf("n_gnode=%d\n",n_gnode);
+	cudaEventRecord(start,0);
+	merge_gpu<<<threads,blocks>>>(d_x,d_y,d_mass,d_particle_index,d_regnum,d_n,d_region_index,d_thread_load,d_rx,d_ry,d_rmass,d_rn,d_flag);
+	//merge_tree<<<threads,blocks>>>(d_rx,d_ry,d_rmass,d_flag);
+	cudaMemcpy(rn,d_rn, n_work*sizeof(int), cudaMemcpyDeviceToHost);
+	cudaMemcpy(rx,d_rx, n_work*sizeof(double), cudaMemcpyDeviceToHost);
+	cudaMemcpy(ry,d_ry, n_work*sizeof(double), cudaMemcpyDeviceToHost);
+	cudaMemcpy(rmass,d_rmass, n_work*sizeof(double), cudaMemcpyDeviceToHost);
 
-	merge_gpu<<<threads,blocks>>>(d_x,d_y,d_mass,d_particle_index,d_regnum,d_n,d_side,d_boxsize,d_local_node,d_region_index,d_thread_load,d_flag);
-	cudaMemcpy(p_local_node,d_local_node, n_work*sizeof(NODE), cudaMemcpyDeviceToHost);
+	int sm = n_gnode*sizeof(GNODE); // for x,y,mass,num
+	merge_top<<<threads,blocks,sm>>>(d_rx,d_ry,d_rmass,d_rn,d_region_index,d_flag);
+	cudaMemcpy(flag,d_flag,n_gnode*sizeof(int), cudaMemcpyDeviceToHost);
+
+	for( int i=0;i<n_gnode;i++ ){
+		printf("region %d, topn=%d\n",i,flag[i]);
+	}
+	/*NODE *root;
+	root = new NODE();
+	create_tree(root,rx,ry,rmass,n_work);*/
+	cudaEventRecord(stop,0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&testtime, start, stop);
+	printf("First step of merge and copy out the result takes %.3f(ms)\n",testtime);
+
+
 	cudaMemcpy(flag,d_flag,n_thread*sizeof(int),cudaMemcpyDeviceToHost);
+
 	//bool check;
 	//check = CUDA_CHECK_ERROR(CUDA_FUNCTION(tree));
 	//printf("%d\n",check);
@@ -234,15 +268,15 @@ int main( int argc, char* argv[] )
 		head = &p_local_node[i];
 		printf("%d\t%d\t%d\n",i, regnum[i]-regnum[i-1],head->num);
 	}*/
-	/*int total=flag[0];	
-	for( int i=1;i<n_work;i++ ){
-		printf("region id=%d, GPU=%d, CPU=%d, xcm=%.3f\n",i,p_local_node[i].num,regnum[i]-regnum[i-1],p_local_node[i].centerofmass[0]);
+	//int total=flag[0];	
+	/*for( int i=1;i<n_work;i++ ){
+		printf("region id=%d, GPU=%d, CPU=%d, xcm=%.3f\n",i,rn[i],regnum[i]-regnum[i-1],rx[i]);
 	}*/
-	for( int i=1;i<n_thread;i++ ){
+	/*for( int i=1;i<n_thread;i++ ){
 		printf("thread id=%d, load = %d\n",i,thread_load[i]-thread_load[i-1]);
 	}
 	printf("%d\n",thread_load[n_thread-1]);
-	printf("well done\n");
+	printf("well done\n");*/
 	printf("size of NODE = %d\n",sizeof(NODE));
 	printf("size of GNODE = %d\n",sizeof(GNODE));
 
@@ -263,9 +297,6 @@ int main( int argc, char* argv[] )
 	char suffix[5] = ".dat";
 	int length;
 
-	cudaEvent_t start, stop;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
 	float t_tree, t_force, t_update, t_estimate;
 	
 	while( t<endtime ){

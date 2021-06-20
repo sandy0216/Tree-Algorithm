@@ -13,10 +13,9 @@ struct NODE{
 };
 
 struct GNODE{
-	float centerofmass[2];
-	float  mass;
-	float side;
+	double centerofmass[2];
+	double  mass;
+	double side;
 	int num;
 	int leaf;
-	GNODE *next[4];
 };
