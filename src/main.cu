@@ -5,7 +5,7 @@
 #include "../inc/init.h"
 #include "../inc/def_node.h"
 #include "../inc/create_tree.h"
-#include "../inc/create_tree_gpu.h"
+#include "../inc/tool_gpu.h"
 #include "../inc/force.h"
 #include "../inc/print_tree.h"
 #include "../inc/tool_main.h"
@@ -34,7 +34,6 @@ int main( int argc, char* argv[] )
 	double *vx, *vy;
 	double *fx,*fy;
 	double *V;
-	double E,Ek;
 	double region = 100.0;  // restrict position of the initial particles
 	double maxmass = 100.0;
 
@@ -79,7 +78,7 @@ int main( int argc, char* argv[] )
 	//		The following code is for GPU parallelization			  //
 	//================================================================================//
 
-
+	
 	//====================GPU blocks & gird settings====================
 	int gid = 0;
 	if( cudaSetDevice(gid) != cudaSuccess ){
@@ -111,13 +110,23 @@ int main( int argc, char* argv[] )
 	int   *d_n;
 	cudaMalloc((void**)&d_n, sizeof(int));
 	cudaMemcpy(d_n, &n, sizeof(int), cudaMemcpyHostToDevice);
-	double *d_x,*d_y,*d_mass;
+	double *d_x,*d_y,*d_mass,*d_vx,*d_vy;
 	cudaMalloc((void**)&d_x, n*sizeof(double));
 	cudaMalloc((void**)&d_y, n*sizeof(double));
 	cudaMalloc((void**)&d_mass, n*sizeof(double));
+	cudaMalloc((void**)&d_vx, n*sizeof(double));
+	cudaMalloc((void**)&d_vy, n*sizeof(double));
+	cudaMemcpy(d_vx, vx, n*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_vy, vy, n*sizeof(double), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_x, x, n*sizeof(double), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_y, y, n*sizeof(double), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_mass, mass, n*sizeof(double), cudaMemcpyHostToDevice);
+	// Allocate memory for force
+	double *d_fx,*d_fy,*d_V,*d_Ek;
+	cudaMalloc((void**)&d_fx,n*sizeof(double));
+	cudaMalloc((void**)&d_fy,n*sizeof(double));
+	cudaMalloc((void**)&d_V,n*sizeof(double));
+	cudaMalloc((void**)&d_Ek,n*sizeof(double));
 	//====================End of setting basic parameters=====================
 
 	//====================Split the particle into different subregion=====================
@@ -167,7 +176,8 @@ int main( int argc, char* argv[] )
 		reg_id = region_index[i];
 		current_thread_load += regnum[reg_id];
 		thread_load[which_thread] += 1;
-		if( current_thread_load>n/n_thread-regnum[reg_id]/4 && which_thread<n_thread-1 ){
+		if( current_thread_load>n/n_thread-regnum[reg_id]/2 && which_thread<n_thread-1 ){
+			printf("thread %d,load %d,take %d region\n",which_thread,current_thread_load,thread_load[which_thread]);
 			which_thread+=1;
 			current_thread_load = 0;
 		}
@@ -242,6 +252,7 @@ int main( int argc, char* argv[] )
 	cudaMemcpyToSymbol( share_node, &sh_node, sizeof(int));
 	int gl_node = (pow(bx,2)-1)*4/3+1;
 	cudaMemcpyToSymbol( global_node, &gl_node, sizeof(int));
+	printf("Allocate shared of %d GNODEs\n",sh_node);
 	
 	// Define global & shared memory
 	GNODE *root;
@@ -259,24 +270,62 @@ int main( int argc, char* argv[] )
 	// Input:center of mass and mass for each subregion, region index
 	// Output:information in the shared & global memory
 	cudaEventRecord(start,0);
-	merge_top<<<threads,blocks,sm>>>(d_rx,d_ry,d_rmass,d_rn,d_region_index,d_root,d_flag);
-	cudaMemcpy(flag,d_flag,gl_node*sizeof(double), cudaMemcpyDeviceToHost);
+	merge_top<<<threads,blocks,sm>>>(d_x,d_y,d_mass,d_rx,d_ry,d_rmass,d_rn,d_region_index,d_thread_load,d_regnum,d_particle_index,d_fx,d_fy,d_V,d_root,d_flag);
+	//cudaMemcpy(flag,d_flag,gl_node*sizeof(double), cudaMemcpyDeviceToHost);
 	cudaMemcpy(root,d_root,gl_node*sizeof(GNODE), cudaMemcpyDeviceToHost);
-
-	
-
-
-
-
-	for( int i=0;i<gl_node;i++ ){
-		printf("region %d, topn=%.3f\n",i,root[i].centerofmass[0]);
-	}
+	cudaMemcpy(fx,d_fx,n*sizeof(double), cudaMemcpyDeviceToHost);
+	//cudaMemcpy(fy,d_fy,n*sizeof(double), cudaMemcpyDeviceToHost);
 	cudaEventRecord(stop,0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&testtime, start, stop);
 	printf("Second step of merge and copy out the result takes %.3f(ms)\n",testtime);
+	double ftest,r;
 
+	for( int i=0;i<20;i++ ){
+		ftest = 0;
+		for( int j=gl_node-1;j>gl_node-bx*bx;j-- ){
+			r = sqrt(pow(root[j].centerofmass[0]-x[i],2)+pow(root[j].centerofmass[1]-y[i],2));
+			ftest += root[j].mass*mass[i]/pow(r,3)*(root[j].centerofmass[0]-x[i]);
+		}
+		printf("particle id = %d,fx=%.3f,fcpu=%.3f\n",i,fx[i],ftest);
+	}
+	//========================End of 'Merge' particle with shared and global memory==================
 
+	//=====================Calculate force by n-body============================
+	cudaEventRecord(start,0);
+	n_body<<<threads,blocks>>>(d_x,d_y,d_mass,d_fx,d_fy,d_V,d_particle_index,d_regnum,d_n,d_region_index,d_thread_load);
+	cudaMemcpy(fx,d_fx,n*sizeof(double), cudaMemcpyDeviceToHost);
+	//cudaMemcpy(fy,d_fy,n*sizeof(double), cudaMemcpyDeviceToHost);
+	cudaEventRecord(stop,0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&testtime, start, stop);
+	printf("Evaluate force for every subregion takes %.3f(ms)\n",testtime);
+	for( int i=0;i<20;i++ ){
+		printf("particle id = %d,fx=%.3f\n",i,fx[i]);
+	}
+	//=====================Calculate force by n-body=============================
+
+	//=====================Update velocity,position==============================
+	cudaEventRecord(start,0);
+	int blocksize = 64;
+	int gridsize = 64;
+	sm = blocksize*sizeof(double);
+	double *E,*d_E;
+	E = (double *)malloc(blocksize*sizeof(double));
+	cudaMalloc((void**)&d_E, blocksize*sizeof(double));
+	update_gpu<<<threads,blocks>>>(d_x,d_y,d_mass,d_vx,d_vy,d_fx,d_fy,d_Ek,d_n);
+	energy_gpu<<<blocksize,gridsize,sm>>>(d_Ek,d_V,d_n,d_E);
+	cudaMemcpy(E,d_E,blocksize*sizeof(double),cudaMemcpyDeviceToHost);
+	cudaMemcpy(x,d_x,n*sizeof(double),cudaMemcpyDeviceToHost);
+	cudaMemcpy(y,d_y,n*sizeof(double),cudaMemcpyDeviceToHost);
+	for( int i=1;i<blocksize;i++ ){
+		E[0] += E[i];
+	}
+	cudaEventRecord(stop,0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&testtime, start, stop);
+	printf("update position & velocity of particles takes %.3f(ms)\n",testtime);
+	printf("Total energy = %.3e\n",E[0]);
 
 
 
@@ -377,8 +426,8 @@ int main( int argc, char* argv[] )
 		// Move to next step
 		t = t+dt;
 		step = step+1;
-	}*/
-	
+	}
+	*/
 
 	return 0;
 }

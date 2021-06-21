@@ -5,12 +5,14 @@
 #include "../inc/def_node.h"
 #include "../inc/tool_tree_gpu.h"
 #include "../inc/param.h"
+#include "../inc/force_gpu.h"
 
+
+extern __shared__ GNODE cache[];
 
 __global__ void merge_bottom(double *x, double *y, double *mass, int *particle_index, unsigned int *regnum, int *n, int *region_index,int *thread_load, double *rx, double *ry, double *rmass, int *rn)
 {
 	int nx = blockDim.x*gridDim.x;
-	int ny = blockDim.y*gridDim.y;
 	int ix = blockDim.x*blockIdx.x + threadIdx.x;
 	int iy = blockDim.y*blockIdx.y + threadIdx.y;
 	int thread_id = ix+iy*nx;
@@ -43,14 +45,15 @@ __global__ void merge_bottom(double *x, double *y, double *mass, int *particle_i
 			rn[reg_id] = par_n;
 		}else{
 			rn[reg_id] = 0;
+			rx[reg_id] = 0;
+			ry[reg_id] = 0;
+			rmass[reg_id] = 0;
 		}
 	}
 }
 
-__global__ void merge_top(double *x, double *y, double *mass, int *num, int *region_index, GNODE *root,double *flag){
-	extern __shared__ GNODE cache[];
-	extern __device__ int share_node;
-	extern __device__ int global_node;
+__global__ void merge_top(double *px,double *py,double *pmass, double *x, double *y, double *mass, int *num, int *region_index, int *thread_load, unsigned int *regnum, int *particle_index, double *fx, double *fy, double *V, GNODE *root,double *flag)
+{
 	int reg_per_block = (d_side/bx)*(d_side/bx);
 	int side_per_block = d_side/bx;
 	int block_id  = blockIdx.x+blockIdx.y*gridDim.x;
@@ -142,10 +145,10 @@ __global__ void merge_top(double *x, double *y, double *mass, int *num, int *reg
 				block_id += blockDim.x*blockDim.y;
 			}
 			__syncthreads();
-
 		}
-	}	
-	
+	}
+	//====================Calculate force===========================
+	force_gpu(root,px,py,pmass,fx,fy,V,region_index,thread_load,regnum,particle_index);	
 
 }
 

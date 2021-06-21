@@ -202,18 +202,3 @@ __device__ void add_particle_gpu(NODE *head, double x, double y, double mass,int
 	}
 }
 
-	
-/*__device__ void create_tree_gpu(NODE *head, vector<double> *x, vector<double> *y, vector<double> *mass, int n, double boxsize)
-{
-	create_node_gpu(head,boxsize/2,boxsize/2,x[0],y[0],mass[0],boxsize);
-	for( int i=1;i<n;i++ ){
-		add_particle(head,x[i],y[i],mass[i]);
-	}
-	NODE* current=head->next[0];
-	if( current == NULL ){
-		//printf("[tree]creation failed\n");
-	}
-}*/
-	
-
-	
