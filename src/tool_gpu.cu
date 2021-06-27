@@ -6,7 +6,7 @@
 #include "../inc/tool_tree_gpu.h"
 #include "../inc/param.h"
 
-__global__ void split(double *x, double *y, int *index, unsigned int *regnum, int *n)
+__global__ void split(double *x, double *y, int *index, int *n)
 {
 	int nx = blockDim.x*gridDim.x;
 	int ny = blockDim.y*gridDim.y;
@@ -17,9 +17,44 @@ __global__ void split(double *x, double *y, int *index, unsigned int *regnum, in
 	while( thread_id<*n ){
 		a = x[thread_id]/(d_boxsize/ d_side);
 		b = y[thread_id]/(d_boxsize/ d_side);
-		index[thread_id] = a+b*(d_side);
-		atomicAdd(&regnum[a+b*(d_side)],1);
+		index[thread_id] = a+b*d_side;
+		//atomicAdd(&regnum[a+b*(d_side)],1);
 		thread_id += nx*ny;
+	}
+}
+
+__global__ void spread_par(double *oldx,double *oldy,double *oldmass,double *newx,double *newy,double *newmass,int *sp_index, int *n){
+//__global__ void spread_reg(double *oldx,double *newx,int *sp_index){
+	int nx = blockDim.x*gridDim.x;
+	int ny = blockDim.y*gridDim.y;
+	int ix = blockDim.x*blockIdx.x+threadIdx.x;
+	int iy = blockDim.y*blockIdx.y+threadIdx.y;
+	int id = ix+iy*nx;
+	int sp_id;
+	while(id<*n){
+		sp_id = sp_index[id];
+		newx[id] = oldx[sp_id];
+		newy[id] = oldy[sp_id];
+		newmass[id] = oldmass[sp_id];
+		id += nx*ny;
+	}
+}
+
+__global__ void spread_reg(double *oldx,double *oldy,double *oldmass,int *oldn,double *newx,double *newy,double *newmass,int *newn,int *sp_index){
+//__global__ void spread_reg(double *oldx,double *newx,int *sp_index){
+	int nx = blockDim.x*gridDim.x;
+	int ny = blockDim.y*gridDim.y;
+	int ix = blockDim.x*blockIdx.x+threadIdx.x;
+	int iy = blockDim.y*blockIdx.y+threadIdx.y;
+	int id = ix+iy*nx;
+	int sp_id;
+	while(id<d_n_work){
+		sp_id = sp_index[id];
+		newx[id] = oldx[sp_id];
+		newy[id] = oldy[sp_id];
+		newmass[id] = oldmass[sp_id];
+		newn[id] = oldn[sp_id];
+		id += nx*ny;
 	}
 }
 

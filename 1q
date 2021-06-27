@@ -337,6 +337,12 @@ int main( int argc, char* argv[] )
 	root = (GNODE *)malloc(gl_node*sizeof(GNODE));
 	GNODE *d_root;
 	cudaMalloc((void**)&d_root, gl_node*sizeof(GNODE));
+	//int sm = sh_node*sizeof(GNODE); 
+
+	// test parameters
+	//double *flag,*d_flag;
+	//flag = (double *)malloc(sh_node*sizeof(double));
+	//cudaMalloc((void**)&d_flag,sh_node*sizeof(double));
 	
 	// Calculate the Morton ordering of the sub-regions
 	// Align the sub-regions with Morton ordering
@@ -348,6 +354,63 @@ int main( int argc, char* argv[] )
 	block(nx,nx,0,0,morton_index,&which_region);
 	cudaMemcpy(d_morton_index,morton_index,n_work*sizeof(int),cudaMemcpyHostToDevice);
 	printf("Finish calculate morton ordering\n");
+	/*t_morton_index = (int *)malloc(n_work*sizeof(int));
+	for( int i=0;i<n_work;i++ ){ t_morton_index[i] = i; }
+	//HeapSort(morton_index,t_morton_index,n_work);
+	for( int i=0;i<n_work;i++ ){
+		printf("%d:%d\n",i,morton_index[i]);
+	}
+	cudaMemcpy(d_morton_index,t_morton_index,n_work*sizeof(int),cudaMemcpyHostToDevice);
+*/
+	double *d_mx,*d_my,*d_mmass,*mx;
+	int *d_mn;
+	mx = (double *)malloc(n_work*sizeof(double));
+	cudaMalloc((void**)&d_mx,n_work*sizeof(double));
+	cudaMalloc((void**)&d_my,n_work*sizeof(double));
+	cudaMalloc((void**)&d_mmass,n_work*sizeof(double));
+	cudaMalloc((void**)&d_mn,n_work*sizeof(int));
+	gpu_memory += n_work*(3*sizeof(double)+sizeof(int));
+	
+	//spread_reg<<<blocks,threads>>>(d_rx,d_mx,d_morton_index);
+	//spread_reg<<<blocks,threads>>>(d_rx,d_ry,d_rmass,d_rn,d_mx,d_my,d_mmass,d_mn,d_morton_index);
+
+#ifdef DEBUG_SHARE
+	cudaMemcpy(rx,d_mx,n_work*sizeof(double),cudaMemcpyDeviceToHost);
+	cudaMemcpy(mx,d_my,n_work*sizeof(double),cudaMemcpyDeviceToHost);
+	cudaMemcpy(rmass,d_mmass,n_work*sizeof(double),cudaMemcpyDeviceToHost);
+	//cudaMemcpy(rn,d_mn,n_work*sizeof(int),cudaMemcpyDeviceToHost);
+	int id;
+	/*for( int i=0;i<n_work;i++ ){
+		id = morton_index[i];
+		mx[i] = ry[id];
+	}*/
+	int reg_per_block = pow(nx/bx,2);
+	int regst = (bx*(bx/2)+bx/2)*reg_per_block;
+	//printf("%d %d\n",bx*bx/2+bx/2,bx/2);
+	for( int i=regst;i<reg_per_block+regst;i++ ){ 
+		id = morton_index[i];
+		printf("region %d(%d,%d) :%.3f  %.3f %d\n",id,id%nx,id/nx,mx[i],ry[id],rn[id]);
+	}
+#endif
+	/*cudaFree(d_rx);
+	cudaFree(d_ry);
+	cudaFree(d_rmass);
+	cudaFree(d_rn);
+	gpu_memory -= n_work*(3*sizeof(double)+sizeof(int));*/
+	
+	/*which_region = 0;
+	int *block_morton_index,*block_index,*d_block_index;
+	block_index = (int *)malloc(bx*by*sizeof(int));
+	block_morton_index = (int *)malloc(bx*by*sizeof(int));
+	cudaMalloc((void**)&d_block_index,bx*by*sizeof(int));
+	block(bx,bx,0,0,block_morton_index,&which_region);
+	for( int i=0;i<bx*by;i++ ){ block_index[i]=i; }
+	HeapSort(block_morton_index,block_index,bx*by);
+	cudaMemcpy(d_block_index,block_index,bx*by*sizeof(int),cudaMemcpyHostToDevice);
+	free(block_morton_index);*/
+	/*for( int i=0;i<bx*by;i++ ){
+		printf("%d:%d\n",i,block_index[i]);
+	}*/
 
 	// Call kernel function:
 	// Input:center of mass and mass for each subregion, region index
@@ -357,17 +420,33 @@ int main( int argc, char* argv[] )
 	dim3 block(1,1);
         dim3 thread(32,32);	
 	merge_top2<<<block,thread>>>(d_root);
+	//merge_top<<<blocks,threads,sm>>>(d_x,d_y,d_mass,d_mx,d_my,d_mmass,d_mn,d_thread_num,d_regnum,d_fx,d_fy,d_V,d_block_index,d_root,d_flag);
+	//cudaMemcpy(flag,d_flag,sh_node*sizeof(double), cudaMemcpyDeviceToHost);
 	cudaMemcpy(root,d_root,gl_node*sizeof(GNODE), cudaMemcpyDeviceToHost);
+	//cudaMemcpy(fx,d_fx,n*sizeof(double), cudaMemcpyDeviceToHost);
+	//cudaMemcpy(fy,d_fy,n*sizeof(double), cudaMemcpyDeviceToHost);
 	cudaEventRecord(stop,0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&testtime, start, stop);
 	printf("Second step of merge and copy out the result takes %.3f(ms)\n",testtime);
-	cudaFree(d_rx);
-	cudaFree(d_ry);
-	cudaFree(d_rmass);
-	cudaFree(d_rn);
+	cudaFree(d_mx);
+	cudaFree(d_my);
+	cudaFree(d_mmass);
+	cudaFree(d_mn);
 	gpu_memory -= n_work*(3*sizeof(double)+sizeof(int));
-	
+/*#ifdef DEBUG_CACHE
+	int reg_per_block = pow(nx/bx,2);
+	int regst = (bx*bx/2+bx/2)*reg_per_block;
+	for( int i=0;i<sh_node;i++ ){
+		printf("cache=%d,num=%.3f",i,flag[i]);
+		if( i>=sh_node-reg_per_block ){
+			id = regst+(i-(sh_node-reg_per_block));
+			printf(",sol = %.3f\n",rx[id]);
+		}else{
+			printf("\n");
+		}
+	}
+#endif*/
 	int test=0;
 	for( int i=gl_node-nx*nx;i<gl_node;i++ ){
 		test += root[i].num;
@@ -410,11 +489,11 @@ int main( int argc, char* argv[] )
 	int st=gl_node-n_work;
 	for( int i=0;i<20;i++ ){
 		ftest = 0;
-		/*for( int j=0;j<n_work;j++ ){
+		for( int j=0;j<n_work;j++ ){
 			r = sqrt(pow(root[st+j].centerofmass[0]-x[i],2)+pow(root[st+j].centerofmass[1]-y[i],2));
 			ftest += root[st+j].mass*mass[i]/pow(r,3)*(root[st+j].centerofmass[0]-x[i]);
-		}*/
-		printf("particle id = %d,x=%.3f,y=%.3f,fx=%.3f\n",i,x[i],y[i],fx[i]);
+		}
+		printf("particle id = %d,x=%.3f,y=%.3f,fx=%.3f\t,fcpu=%.3f\n",i,x[i],y[i],fx[i],ftest);
 	}
 	for( int i=0;i<n;i++ ){
 		if( abs(fx[i]-100)<1e-7 ){
