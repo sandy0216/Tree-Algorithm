@@ -1,32 +1,5 @@
 #include "../inc/def_node.h"
 
-__device__ void create_node_gpu(NODE *head, double cx, double cy, double x, double y, double mass, double side)
-{
-	head->center[0] = cx;
-	head->center[1] = cy;
-	head->centerofmass[0] = x;
-	head->centerofmass[1] = y;
-	head->mass = mass;
-	head->side = side;
-	head->num  = 1;
-	head->leaf = 0;
-	for( int i=0;i<4;i++ ){
-		head->next[i] = NULL;
-	}
-}
-
-__device__ int region_gpu(double x, double y, double cx, double cy){
-	if( x>=cx && y>=cy ){
-		return 0;
-	}else if( x<cx && y>=cy ){
-		return 1;
-	}else if( x<cx && y<cy ){
-		return 2;
-	}else if( x>=cx && y<cy ){
-		return 3;
-	}
-	return 5;
-}
 
 __device__ void finest_grid_gpup(NODE *current, double x, double y, double mass,int *flag);
 
@@ -156,7 +129,7 @@ __device__ void finest_grid_gpup(NODE *current, double x, double y, double mass,
 
 
 
-__device__ void add_particle_gpu(NODE *head, double x, double y, double mass,int *flag)
+/*__device__ void add_particle_gpu(NODE *head, double x, double y, double mass,int *flag)
 {
 	NODE *current = head;
 	NODE *temp;
@@ -200,5 +173,5 @@ __device__ void add_particle_gpu(NODE *head, double x, double y, double mass,int
 		}//End of if-else while reaching the smallest grid
 		
 	}
-}
+}*/
 

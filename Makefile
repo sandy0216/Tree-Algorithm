@@ -9,7 +9,7 @@ LIB     := -lcufft -lcudart
 NVFLAGS := -arch=compute_61 -code=sm_61,sm_61 -O3 -m64 --compiler-options -fno-strict-aliasing -DUNIX -ftz=true -prec-div=false -prec-sqrt=false -Xcompiler -fopenmp -rdc=true -lgsl -lgslcblas -lm
 
 TARGET := ./tree
-OBJ    := ./lib/heap.o ./lib/init.o ./lib/print_tree.o ./lib/tool_tree.o ./lib/force_gpu.o ./lib/merge_tree_gpu.o ./lib/tool_tree_gpu.o ./lib/create_tree.o ./lib/tool_gpu.o ./lib/force.o ./lib/tool_main.o ./lib/main.o
+OBJ    := ./lib/heap.o ./lib/init.o ./lib/print_tree.o ./lib/tool_tree.o ./lib/force_gpu.o ./lib/merge_tree_gpu.o ./lib/tree_gpu_tool.o ./lib/create_tree.o ./lib/tool_gpu.o ./lib/force.o ./lib/tree_gpu.o ./lib/tool_main.o ./lib/main.o
 
 $(TARGET):$(OBJ)
 	$(NVCC) $(OBJ) $(NVFLAGS) -o $(TARGET)
@@ -23,7 +23,7 @@ $(TARGET):$(OBJ)
 	$(NVCC) $(NVFLAGS) -c $< -o $@
 ./lib/tool_tree.o : ./src/tool_tree.cu
 	$(NVCC) $(NVFLAGS) -c $< -o $@
-./lib/tool_tree_gpu.o : ./src/tool_tree_gpu.cu
+./lib/tree_gpu_tool.o : ./src/tree_gpu_tool.cu
 	$(NVCC) $(NVFLAGS) -c $< -o $@
 ./lib/create_tree.o : ./src/create_tree.cu
 	$(NVCC) $(NVFLAGS) -c $< -o $@
@@ -41,6 +41,9 @@ $(TARGET):$(OBJ)
 	$(NVCC) $(NVFLAGS) -c $< -o $@
 ./lib/force_gpu.o : ./src/force_gpu.cu
 	$(NVCC) $(NVFLAGS) -c $< -o $@
+./lib/tree_gpu.o : ./src/tree_gpu.cu
+	$(NVCC) $(NVFLAGS) -c $< -o $@
+
 
 
 

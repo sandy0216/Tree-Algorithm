@@ -23,7 +23,7 @@ __global__ void split(double *x, double *y, int *index, int *n)
 	}
 }
 
-__global__ void spread_par(double *oldx,double *oldy,double *oldmass,double *newx,double *newy,double *newmass,int *sp_index, int *n){
+__global__ void spread_par(double *oldx,double *newx,int *sp_index, int *n){
 //__global__ void spread_reg(double *oldx,double *newx,int *sp_index){
 	int nx = blockDim.x*gridDim.x;
 	int ny = blockDim.y*gridDim.y;
@@ -34,8 +34,6 @@ __global__ void spread_par(double *oldx,double *oldy,double *oldmass,double *new
 	while(id<*n){
 		sp_id = sp_index[id];
 		newx[id] = oldx[sp_id];
-		newy[id] = oldy[sp_id];
-		newmass[id] = oldmass[sp_id];
 		id += nx*ny;
 	}
 }
@@ -113,12 +111,14 @@ __global__ void update_gpu(double *x,double *y,double *mass,double *vx,double *v
 	int ix = blockDim.x*blockIdx.x + threadIdx.x;
 	int iy = blockDim.y*blockIdx.y + threadIdx.y;
 	int thread_id = ix+iy*nx;
+	double ek;
 	while( thread_id<*n ){
 		x[thread_id] += d_dt*vx[thread_id];
 		y[thread_id] += d_dt*vy[thread_id];
 		vx[thread_id] += d_dt*fx[thread_id];
 		vy[thread_id] += d_dt*fy[thread_id];
-		Ek[thread_id] = 0.5*mass[thread_id]*(pow(vx[thread_id],2)+pow(vy[thread_id],2));
+		ek = 0.5*mass[thread_id]*(pow(vx[thread_id],2)+pow(vy[thread_id],2));
+		atomicAdd(Ek,ek);
 		thread_id += nx*ny;
 	}
 }
@@ -156,7 +156,7 @@ __global__ void energy_gpu(double *Ek,double *V,int *n,double *E)
 
 
 
-__global__ void tree(double *x, double *y, double *mass, int *particle_index , unsigned int *regnum, int *n, int *side, double* boxsize, NODE *local,int *region_index, int *thread_load, int* flag)
+/*__global__ void tree(double *x, double *y, double *mass, int *particle_index , unsigned int *regnum, int *n, int *side, double* boxsize, NODE *local,int *region_index, int *thread_load, int* flag)
 {
 	int nx = blockDim.x*gridDim.x;
 	int ny = blockDim.y*gridDim.y;
@@ -205,5 +205,5 @@ __global__ void tree(double *x, double *y, double *mass, int *particle_index , u
 		copy = &local[region_id];
 		copy->num = root->num;
 	}
-}
+}*/
 	

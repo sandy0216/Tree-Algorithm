@@ -14,6 +14,7 @@
 #include "../inc/cuapi.h"
 #include "../inc/merge_tree_gpu.h"
 #include "../inc/force_gpu.h"
+#include "../inc/tree_gpu.h"
 
 using namespace std;
 
@@ -56,7 +57,7 @@ int main( int argc, char* argv[] )
 	vy = (double *)malloc(n*sizeof(double));
 	fx = (double *)malloc(n*sizeof(double));
 	fy = (double *)malloc(n*sizeof(double));
-	V  = (double *)malloc(n*sizeof(double));
+	V  = (double *)malloc(sizeof(double));
 
 	//==================initial conditions========================
 	// Create initial conditions
@@ -111,6 +112,7 @@ int main( int argc, char* argv[] )
 	cudaMemcpyToSymbol( d_bx, &bx, sizeof(int));
 	cudaMemcpyToSymbol( d_theta, &theta, sizeof(double));
 	cudaMemcpyToSymbol( d_eplison, &eplison, sizeof(double));
+	cudaMemcpyToSymbol( d_dt,&dt, sizeof(double));
 	gpu_memory += 4*sizeof(int)+3*sizeof(double);
 	
 	// Deliver the information of each particle to GPU
@@ -159,116 +161,9 @@ int main( int argc, char* argv[] )
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&testtime, start, stop);
 	printf("Split&copy out the result takes %.3e(ms)\n",testtime);
+	gpu_memory -= n*sizeof(int);
 	//===================End of splitting particles into different subregion============
-
-	/*//=============================Do Load Balance=================================
-	cudaEventRecord(start,0);
-	// Record thread index for each region
-	int *reg_thread_index,*reg_index;
-	reg_index = (int *)malloc(n_work*sizeof(int));
-	reg_thread_index = (int *)malloc(n_work*sizeof(int));
-	for( int i=0;i<n_work;i++ ){ reg_index[i]=i; }
-
-	// Record number of regions in each thread
-	int *thread_num;
-	thread_num = (int *)malloc(n_thread*sizeof(int));
-	for( int i=0;i<n_thread;i++ ){ thread_num[i]=0; }
-
-	// Do the load balance
-	printf("Use %d regions, each thread takes %d \n",n_work,n_work/n_thread);
-	if( n_work<n_thread ){
-		for( int i=0;i<n_work;i++ ){
-			reg_index[i] = i;
-			thread_num[i] = 1;
-		}
-	}else{
-		balance(regnum,reg_thread_index,thread_num);
-		HeapSort(reg_thread_index,reg_index,n_work);
-	}
-	free(reg_thread_index);
 	
-	// Check to region is left and cumsum the load of each thread
-	int check = thread_num[0];
-	for( int i=1;i<n_thread;i++ ){
-		check += thread_num[i];
-		thread_num[i] += thread_num[i-1];
-	}
-	if( check != n_work ){
-		printf("Error no load balance!!!\n");
-		exit(1);
-	}
-	
-	int *d_region_index,*d_thread_num;
-	cudaMalloc((void**)&d_region_index,n_work*sizeof(int));
-	cudaMalloc((void**)&d_thread_num,n_thread*sizeof(int));
-	cudaMemcpy(d_region_index,reg_index,n_work*sizeof(int),cudaMemcpyHostToDevice);
-	cudaMemcpy(d_thread_num,thread_num,n_thread*sizeof(int),cudaMemcpyHostToDevice);
-	cudaEventRecord(stop,0);
-	cudaEventSynchronize(stop);
-	cudaEventElapsedTime(&testtime, start, stop);
-	printf("Load balancing takes %.3f(ms)\n",testtime);
-
-	//=====================End fo load balance=======================*/
-
-	/*//=====================Allocate each particles===================	
-	cudaEventRecord(start,0);
-	// Cumsum of the # of particle in each region
-	for( int i=1;i<n_work;i++ ){
-		regnum[i] += regnum[i-1];
-	}
-	cudaMemcpy(d_regnum,regnum,n_work*sizeof(unsigned int), cudaMemcpyHostToDevice);
-	
-	// Sort the particle by the region index
-	int *particle_index,*d_particle_index;
-	particle_index = (int *)malloc(n*sizeof(int));
-	cudaMalloc((void**)&d_particle_index,n*sizeof(int));
-	for( int i=0;i<n;i++ ){
-		particle_index[i] = i;
-	}
-	
-	double *d_px,*d_py,*d_pmass;
-	cudaMalloc((void**)&d_px,n*sizeof(double));
-	cudaMalloc((void**)&d_py,n*sizeof(double));
-	cudaMalloc((void**)&d_pmass,n*sizeof(double));
-
-#ifdef DEBUG_SORTING
-	printf("Before sorting:\n");
-	for( int i=n-1;i>n-15;i-- ){
-		printf("%.3f,%.3f\n",x[i],y[i]);
-	}
-#endif
-
-	if( n>6e7 ){
-		HeapSort4(index,x,y,mass,particle_index,n);
-		cudaMemcpy(d_px,x,n*sizeof(double),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_py,y,n*sizeof(double),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_pmass,mass,n*sizeof(double),cudaMemcpyHostToDevice);
-	}else{
-		HeapSort(index,particle_index,n);
-		cudaMemcpy(d_particle_index,particle_index,n*sizeof(int),cudaMemcpyHostToDevice);
-		spread_par<<<blocks,threads>>>(d_x,d_y,d_mass,d_px,d_py,d_pmass,d_particle_index,d_n);
-		cudaMemcpy(x,d_px,n*sizeof(double),cudaMemcpyDeviceToHost);
-		cudaMemcpy(y,d_py,n*sizeof(double),cudaMemcpyDeviceToHost);
-	}
-	cudaFree(d_x);
-	cudaFree(d_y);
-	cudaFree(d_mass);*
-	
-
-
-
-#ifdef DEBUG_SORTING
-	printf("After sorting:\n");
-	for( int i=n-1;i>n-15;i-- ){
-		printf("%.3f,%.3f\n",x[i],y[i]);
-	}
-#endif
-	cudaEventRecord(stop,0);
-	cudaEventSynchronize(stop);
-	cudaEventElapsedTime(&testtime, start, stop);
-	printf("Sorting particles takes %.3f(ms)\n",testtime);
-	//====================End of allocate each particles=====================*/
-
 
 	//==================='Merge' particles in different subregion into a particle================
 	// Treat the particles in each region as a new particle
@@ -303,6 +198,8 @@ int main( int argc, char* argv[] )
 	merge_bottom2<<<blocks,threads>>>(d_rx,d_ry,d_rmass);
 	//merge_bottom<<<blocks,threads>>>(d_px,d_py,d_pmass,d_regnum,d_n,d_region_index,d_thread_num,d_rx,d_ry,d_rmass,d_rn);
 	//merge_bottom<<<blocks,threads>>>(d_px,d_pmass,d_regnum,d_n,d_region_index,d_thread_num,d_rx,d_ry,d_rmass,d_rn);
+	cudaFree(d_index);
+	gpu_memory -= n*sizeof(int);
 
 	cudaEventRecord(stop,0);
 	cudaEventSynchronize(stop);
@@ -316,14 +213,15 @@ int main( int argc, char* argv[] )
 	int st=0;
 	for( int i=0;i<n_work;i++ ){
 		if(rn[i]==0){
-		printf("region:%d, %d particles(%d), xcm=%.3f, ycm=%.3f, mass=%.3f\n",st+i,rn[st+i],regnum[st+i],rx[st+i],ry[st+i],rmass[st+i]);
+		printf("region:%d, %d particles, xcm=%.3f, ycm=%.3f, mass=%.3f\n",st+i,rn[st+i],rx[st+i],ry[st+i],rmass[st+i]);
 		}
 	}
 #endif
 	printf("First step of merge and copy out the result takes %.3f(ms)\n",testtime);
 	//===================End of 'Merge' particles in different region=======================
 
-	
+
+		
 	//==================='Merge' particles with shared and global memory====================
 	// Calculate memory for shared and global memory
 	//int sh_node = (pow(nx/bx,2)-1)*4/3+1;
@@ -337,6 +235,7 @@ int main( int argc, char* argv[] )
 	root = (GNODE *)malloc(gl_node*sizeof(GNODE));
 	GNODE *d_root;
 	cudaMalloc((void**)&d_root, gl_node*sizeof(GNODE));
+	gpu_memory += gl_node*sizeof(GNODE);
 	
 	// Calculate the Morton ordering of the sub-regions
 	// Align the sub-regions with Morton ordering
@@ -365,7 +264,7 @@ int main( int argc, char* argv[] )
 	cudaFree(d_rx);
 	cudaFree(d_ry);
 	cudaFree(d_rmass);
-	cudaFree(d_rn);
+	cudaFree(d_morton_index);
 	gpu_memory -= n_work*(3*sizeof(double)+sizeof(int));
 	
 	int test=0;
@@ -373,29 +272,20 @@ int main( int argc, char* argv[] )
 		test += root[i].num;
 		//printf("global=%d,num=%d,xm=%.3f\n",i,root[i].num,root[i].centerofmass[0]);
 	}
-	/*for( int i=gl_node-nx*nx;i<gl_node;i++ ){
-		printf("%d(%d,%d):%d(%d,%d)\n",i,i/nx,i%nx,root[i].leaf,root[i].leaf/nx,root[i].leaf%nx);
-	}*/
 	printf("Total particle=%d\n",test);
 	
-	/*for( int i=n-1;i>n-15;i-- ){
-		printf("x,y = %.3f,%.3f,fx=%.3f, fy=%.3f\n",x[i],y[i],fx[i],fy[i]);
-	}
-	printf("%.3e,%.3f\n",eplison,theta);*/
 
-	//merge_global<<<blocks,threads>>>(d_px,d_py,d_pmass,d_thread_num,d_regnum,d_fx,d_fy,d_V,d_block_index,d_root);
-
-//#ifdef DEBUG_GLOBAL
-	//cudaMemcpy(root,d_root,gl_node*sizeof(GNODE), cudaMemcpyDeviceToHost);
+#ifdef DEBUG_GLOBAL
 	for( int i=0;i<5;i++ ){
 		printf("global=%d,num=%d,xm=%.3f\n",i,root[i].num,root[i].centerofmass[0]);
 	}
-//#endif
+#endif
 	cudaEventRecord(start,0);
 	force_gpu<<<blocks,threads>>>(d_root,d_x,d_y,d_mass,d_fx,d_fy,d_V,d_n);
 	cudaMemcpy(fx,d_fx,n*sizeof(double), cudaMemcpyDeviceToHost);
 	cudaMemcpy(fy,d_fy,n*sizeof(double), cudaMemcpyDeviceToHost);
-
+	cudaFree(d_root);
+	gpu_memory -= gl_node*sizeof(GNODE);
 
 	double ftest,r;
 
@@ -406,16 +296,16 @@ int main( int argc, char* argv[] )
 			ftest += rmass[j]*mass[i]/pow(r,3)*(rx[j]-x[i]);
 		}
 		printf("particle id = %d,fx=%.3f,fcpu=%.3f\n",i,fx[i],ftest);
-	}*/
+	}
 	int st=gl_node-n_work;
 	for( int i=0;i<20;i++ ){
 		ftest = 0;
-		/*for( int j=0;j<n_work;j++ ){
+		for( int j=0;j<n_work;j++ ){
 			r = sqrt(pow(root[st+j].centerofmass[0]-x[i],2)+pow(root[st+j].centerofmass[1]-y[i],2));
 			ftest += root[st+j].mass*mass[i]/pow(r,3)*(root[st+j].centerofmass[0]-x[i]);
-		}*/
+		}
 		printf("particle id = %d,x=%.3f,y=%.3f,fx=%.3f\n",i,x[i],y[i],fx[i]);
-	}
+	}*/
 	for( int i=0;i<n;i++ ){
 		if( abs(fx[i]-100)<1e-7 ){
 			printf("Buffer is not enough!!!\n");
@@ -432,44 +322,196 @@ int main( int argc, char* argv[] )
 	cudaEventElapsedTime(&testtime, start, stop);
 	printf("Calculating global force takes %.3f(ms)\n",testtime);
 	//========================End of 'Merge' particle with shared and global memory==================
+	
 
-	/*
-	//=====================Calculate force by n-body============================
+
+	//=============================Do Load Balance=================================
 	cudaEventRecord(start,0);
-	n_body<<<threads,blocks>>>(d_x,d_y,d_mass,d_fx,d_fy,d_V,d_particle_index,d_regnum,d_n,d_region_index,d_thread_load);
-	cudaMemcpy(fx,d_fx,n*sizeof(double), cudaMemcpyDeviceToHost);
-	//cudaMemcpy(fy,d_fy,n*sizeof(double), cudaMemcpyDeviceToHost);
+	// Record thread index for each region
+	int *reg_thread_index,*reg_index;
+	reg_index = (int *)malloc(n_work*sizeof(int));
+	reg_thread_index = (int *)malloc(n_work*sizeof(int));
+	for( int i=0;i<n_work;i++ ){ reg_index[i]=i; }
+
+	// Record number of regions in each thread
+	int *thread_num;
+	thread_num = (int *)malloc(n_thread*sizeof(int));
+	for( int i=0;i<n_thread;i++ ){ thread_num[i]=0; }
+
+	// Do the load balance
+	printf("Use %d regions, each thread takes %d \n",n_work,n_work/n_thread);
+	if( n_work<n_thread ){
+		for( int i=0;i<n_work;i++ ){
+			reg_index[i] = i;
+			thread_num[i] = 1;
+		}
+	}else{
+		balance(rn,reg_thread_index,thread_num);
+		HeapSort(reg_thread_index,reg_index,n_work);
+	}
+	free(reg_thread_index);
+	
+	// Check to region is left and cumsum the load of each thread
+	int check = thread_num[0];
+	for( int i=1;i<n_thread;i++ ){
+		check += thread_num[i];
+		thread_num[i] += thread_num[i-1];
+	}
+	if( check != n_work ){
+		printf("Error no load balance!!!\n");
+		exit(1);
+	}
+	
+	int *d_region_index,*d_thread_num;
+	cudaMalloc((void**)&d_region_index,n_work*sizeof(int));
+	cudaMalloc((void**)&d_thread_num,n_thread*sizeof(int));
+	cudaMemcpy(d_region_index,reg_index,n_work*sizeof(int),cudaMemcpyHostToDevice);
+	cudaMemcpy(d_thread_num,thread_num,n_thread*sizeof(int),cudaMemcpyHostToDevice);
+	cudaEventRecord(stop,0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&testtime, start, stop);
+	printf("Load balancing takes %.3f(ms)\n",testtime);
+
+	//=====================End fo load balance=======================
+
+	//=====================Allocate each particles===================	
+	cudaEventRecord(start,0);
+	// Cumsum of the # of particle in each region
+	for( int i=1;i<n_work;i++ ){
+		rn[i] += rn[i-1];
+	}
+	cudaMemcpy(d_rn,rn,n_work*sizeof(unsigned int), cudaMemcpyHostToDevice);
+	
+	// Sort the particle by the region index
+	int *particle_index,*d_particle_index;
+	particle_index = (int *)malloc(n*sizeof(int));
+	cudaMalloc((void**)&d_particle_index,n*sizeof(int));
+	for( int i=0;i<n;i++ ){
+		particle_index[i] = i;
+	}
+	
+	double *d_p;
+	cudaMalloc((void**)&d_p,n*sizeof(double));
+	//cudaMalloc((void**)&d_py,n*sizeof(double));
+	//cudaMalloc((void**)&d_pmass,n*sizeof(double));
+
+#ifdef DEBUG_SORTING
+	printf("Before sorting:\n");
+	for( int i=n-1;i>n-15;i-- ){
+		printf("%.3f %.3f\n",x[i],y[i]);
+	}
+#endif
+	/*if( n>6e7 ){
+		HeapSort4(index,x,y,mass,particle_index,n);
+		cudaMemcpy(d_px,x,n*sizeof(double),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_py,y,n*sizeof(double),cudaMemcpyHostToDevice);
+		cudaMemcpy(d_pmass,mass,n*sizeof(double),cudaMemcpyHostToDevice);
+	}else{*/
+	HeapSort(index,particle_index,n);
+	cudaEventRecord(stop,0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&testtime, start, stop);
+	printf("Sorting particles takes %.3f(ms)\n",testtime);
+
+	cudaEventRecord(start,0);
+	cudaMemcpy(d_particle_index,particle_index,n*sizeof(int),cudaMemcpyHostToDevice);
+	spread_par<<<blocks,threads>>>(d_x,d_p,d_particle_index,d_n);
+	cudaMemcpy(x,d_p,n*sizeof(double),cudaMemcpyDeviceToHost);
+	cudaMemcpy(d_x,d_p,n*sizeof(double),cudaMemcpyDeviceToDevice);
+	spread_par<<<blocks,threads>>>(d_y,d_p,d_particle_index,d_n);
+	cudaMemcpy(y,d_p,n*sizeof(double),cudaMemcpyDeviceToHost);
+	cudaMemcpy(d_y,d_p,n*sizeof(double),cudaMemcpyDeviceToDevice);
+	spread_par<<<blocks,threads>>>(d_mass,d_p,d_particle_index,d_n);
+	cudaMemcpy(mass,d_p,n*sizeof(double),cudaMemcpyDeviceToHost);
+	cudaMemcpy(d_mass,d_p,n*sizeof(double),cudaMemcpyDeviceToDevice);
+	cudaFree(d_p);
+
+	//cudaMemcpy(y,d_py,n*sizeof(double),cudaMemcpyDeviceToHost);
+	//}
+	/*cudaFree(d_x);
+	cudaFree(d_y);
+	cudaFree(d_mass);*/
+
+#ifdef DEBUG_SORTING
+	printf("After sorting:\n");
+	for( int i=n-1;i>n-15;i-- ){
+		printf("%.3f %.3f\n",x[i],y[i]);
+	}
+#endif
+	cudaEventRecord(stop,0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&testtime, start, stop);
+	printf("Locating particles takes %.3f(ms)\n",testtime);
+	//====================End of allocate each particles=====================*/
+
+
+	
+	//=====================Calculate force by n-body============================
+	/*for( int i=0;i<n;i++ ){ fx[i] = 100; }
+	cudaMemcpy(d_fx,fx,n*sizeof(double),cudaMemcpyHostToDevice);*/
+	for( int i=n-1;i>n-20;i-- ){
+		printf("particle id = %d,fx=%.3f\n",i,fx[i]);
+	}
+	cudaEventRecord(start,0);
+	treeforce<<<blocks,threads>>>(d_x,d_y,d_mass,d_fx,d_fy,d_V,d_rn,d_region_index,d_thread_num,d_n);
+	cudaMemcpy(fy,d_fx,n*sizeof(double), cudaMemcpyDeviceToHost);
+	cudaMemcpy(V,d_V,sizeof(double), cudaMemcpyDeviceToHost);
 	cudaEventRecord(stop,0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&testtime, start, stop);
 	printf("Evaluate force for every subregion takes %.3f(ms)\n",testtime);
-	for( int i=0;i<20;i++ ){
-		printf("particle id = %d,fx=%.3f\n",i,fx[i]);
+	for( int i=n-1;i>n-20;i-- ){
+		printf("particle id = %d,fx=%.3f(d=%.3e)\n",i,fy[i],fx[i]-fy[i]);
 	}
+	cudaFree(d_rn);
+	cudaFree(d_region_index);
+	cudaFree(d_thread_num);
 	//=====================Calculate force by n-body=============================
 
+	
 	//=====================Update velocity,position==============================
 	cudaEventRecord(start,0);
-	int blocksize = 64;
-	int gridsize = 64;
-	sm = blocksize*sizeof(double);
-	double *E,*d_E;
-	E = (double *)malloc(blocksize*sizeof(double));
-	cudaMalloc((void**)&d_E, blocksize*sizeof(double));
-	update_gpu<<<threads,blocks>>>(d_x,d_y,d_mass,d_vx,d_vy,d_fx,d_fy,d_Ek,d_n);
-	energy_gpu<<<blocksize,gridsize,sm>>>(d_Ek,d_V,d_n,d_E);
-	cudaMemcpy(E,d_E,blocksize*sizeof(double),cudaMemcpyDeviceToHost);
+	double *d_v;
+	cudaMalloc((void**)&d_v,n*sizeof(double));
+	cudaMalloc((void**)&d_p,n*sizeof(double));
+	cudaMemcpy(d_v,vx,n*sizeof(double),cudaMemcpyHostToDevice);
+	spread_par<<<blocks,threads>>>(d_v,d_p,d_particle_index,d_n);
+	cudaMemcpy(vx,d_p,n*sizeof(double),cudaMemcpyDeviceToHost);
+	
+	cudaMemcpy(d_v,vy,n*sizeof(double),cudaMemcpyHostToDevice);
+	spread_par<<<blocks,threads>>>(d_v,d_p,d_particle_index,d_n);
+	cudaMemcpy(vy,d_p,n*sizeof(double),cudaMemcpyDeviceToHost);
+	cudaFree(d_p);
+	cudaFree(d_v);
+	cudaFree(d_particle_index);
+
+	double *d_vx,*d_vy;
+	cudaMalloc((void**)&d_vx,n*sizeof(double));
+	cudaMalloc((void**)&d_vy,n*sizeof(double));
+	cudaMemcpy(d_vx,vx,n*sizeof(double),cudaMemcpyHostToDevice);
+	cudaMemcpy(d_vy,vy,n*sizeof(double),cudaMemcpyHostToDevice);
+
+	double *E;
+	E = (double *)malloc(sizeof(double));
+	*E = 0.0;
+	cudaMemcpy(d_Ek,E,sizeof(double),cudaMemcpyHostToDevice);
+	update_gpu<<<blocks,threads>>>(d_x,d_y,d_mass,d_vx,d_vy,d_fx,d_fy,d_Ek,d_n);
 	cudaMemcpy(x,d_x,n*sizeof(double),cudaMemcpyDeviceToHost);
 	cudaMemcpy(y,d_y,n*sizeof(double),cudaMemcpyDeviceToHost);
-	for( int i=1;i<blocksize;i++ ){
-		E[0] += E[i];
-	}
+	cudaFree(d_x);
+	cudaFree(d_y);
+	cudaFree(d_fx);
+	cudaFree(d_fy);
+	cudaFree(d_vx);
+	cudaFree(d_vy);
+	cudaFree(d_mass);
+	cudaMemcpy(E,d_Ek,sizeof(double),cudaMemcpyDeviceToHost);
 	cudaEventRecord(stop,0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&testtime, start, stop);
 	printf("update position & velocity of particles takes %.3f(ms)\n",testtime);
-	printf("Total energy = %.3e\n",E[0]);
-	*/
+	printf("Total energy = %.3e\n",*E+*V);
+	printf("Ek = %.3e V = %.3e\n",*E,*V);
 
 
 

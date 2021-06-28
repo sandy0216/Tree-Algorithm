@@ -64,14 +64,14 @@ void block(const int len,int n,int stx,int sty,int *region_index,int *which_regi
 	}
 }
 
-void balance(unsigned int *regnum,int *reg_index, int *thread_num)
+void balance(int *regnum,int *reg_index, int *thread_num)
 {	// Assuming n_work>n_thread
 	int *thread_par_load;
 	int *thread_id;
 	thread_par_load = (int *)malloc(n_thread*sizeof(int));
 	thread_id = (int *)malloc(n_thread*sizeof(int));
 	for( int i=0;i<n_thread;i++ ){
-		thread_par_load[i] = regnum[i];
+		thread_par_load[i] = pow(regnum[i],2);
 		thread_id[i] = i;
 		thread_num[i] = 1;
 		reg_index[i] = i;
@@ -81,7 +81,7 @@ void balance(unsigned int *regnum,int *reg_index, int *thread_num)
 			printf("thread %d, load %d\n",thread_id[j],thread_par_load[j]);
 	}*/
 	for( int i=n_thread;i<n_work;i++ ){
-		thread_par_load[0] += regnum[i];
+		thread_par_load[0] += pow(regnum[i],2);
 		reg_index[i] = thread_id[0];
 		thread_num[thread_id[0]] += 1;
 		MinHeapify(thread_par_load,thread_id,0);

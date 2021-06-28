@@ -19,3 +19,11 @@ struct GNODE{
 	int num;
 	int leaf;
 };
+
+struct TNODE{
+	double centerofmass[2];
+	double mass;
+	double side;
+	int num;
+	TNODE *next[4];
+};

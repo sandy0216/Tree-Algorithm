@@ -5,8 +5,6 @@
 #include "../inc/param.h"
 
 
-__device__ void node_force_gpu(GNODE *root,int global_id,double x,double y,double mass,double *fx,double *fy,double *v);
-__device__ void node_force_gpup(GNODE *root,int global_id,double x,double y,double mass,double *fx,double *fy,double *v);
 
 __global__ void force_gpu(GNODE *root,double *x,double *y,double *mass,double *fx,double *fy,double *V,int *n)
 {
@@ -85,54 +83,4 @@ __global__ void force_gpu(GNODE *root,double *x,double *y,double *mass,double *f
 	}
 }
 
-__device__ void node_force_gpu(GNODE *root,int global_id,double x,double y,double mass,double *fx,double *fy,double *v)
-{
-	double cmx,cmy,r,side,m;
-	cmx = root[global_id].centerofmass[0];
-	cmy = root[global_id].centerofmass[1];
-	side = root[global_id].side;
-	m = root[global_id].mass;
-	r = sqrt(pow(cmx-x,2)+pow(cmy-y,2));
-	if( side/r<d_theta || global_id>global_node-bx*bx ){
-		if( r>d_eplison ){
-			*fx += mass*m/pow(r,3)*(cmx-x);
-			*fy += mass*m/pow(r,3)*(cmy-y);
-			*v  += -mass*m/r;
-		}else{
-			*fx += mass*m/sqrt(pow(pow(r,2)+pow(d_eplison,2),3))*(cmx-x);
-			*fy += mass*m/sqrt(pow(pow(r,2)+pow(d_eplison,2),3))*(cmy-y);
-			*v  += -mass*m/sqrt(pow(r,2)+pow(d_eplison,2));
-		}
-	}else{
-		for( int i=1;i<5;i++ ){
-			node_force_gpup(root,4*global_id+i,x,y,mass,fx,fy,v);
-		}
-	}
-}
-
-__device__ void node_force_gpup(GNODE *root,int global_id,double x,double y,double mass,double *fx,double *fy,double *v)
-{
-	double cmx,cmy,r,side,m;
-	cmx = root[global_id].centerofmass[0];
-	cmy = root[global_id].centerofmass[1];
-	side = root[global_id].side;
-	m = root[global_id].mass;
-	r = sqrt(pow(cmx-x,2)+pow(cmy-y,2));
-	if( side/r<d_theta || global_id>global_node-bx*bx ){
-		if( r>d_eplison ){
-			*fx += mass*m/pow(r,3)*(cmx-x);
-			*fy += mass*m/pow(r,3)*(cmy-y);
-			*v  += -mass*m/r;
-		}else{
-			*fx += mass*m/sqrt(pow(pow(r,2)+pow(d_eplison,2),3))*(cmx-x);
-			*fy += mass*m/sqrt(pow(pow(r,2)+pow(d_eplison,2),3))*(cmy-y);
-			*v  += -mass*m/sqrt(pow(r,2)+pow(d_eplison,2));
-		}
-	}else{
-		//*fx += 100;
-		for( int i=1;i<5;i++ ){
-			node_force_gpu(root,4*global_id+i,x,y,mass,fx,fy,v);
-		}
-	}
-}
 
