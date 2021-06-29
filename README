@@ -32,7 +32,7 @@ Simply type :
 =====
 HOW TO RUN:
 Simply type :
-	./tree
+	./tree -CPU/-GPU ./params
 	
 	
 
