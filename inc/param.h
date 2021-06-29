@@ -50,5 +50,5 @@ extern __device__ int global_node;
 //#define DEBUG_FORCE
 
 //#define RECORD_INI
-#define OUTPUT_DETAIL
-
+//#define OUTPUT_DETAIL
+#define BALANCE

@@ -63,7 +63,11 @@ void node_potential(NODE *head, double x, double y, double mass, double *dv)
 	r   = sqrt(pow(cmx-x,2)+pow(cmy-y,2));
 	if( r<1e-3 ){
 	}else if( side/r < theta || head->num==1 ){
-		*dv = *dv-mass*m/r;
+		if( r>eplison ){
+			*dv = *dv-mass*m/r;
+		}else{
+			*dv = *dv-mass*m/sqrt(pow(r,2)+pow(eplison,2));
+		}
 	}else{
 		for( int i=0;i<4;i++ ){
 		if( head->next[i] != NULL ){
@@ -125,9 +129,9 @@ void force(NODE *head, double *x, double *y, double *mass, double *fx, double *f
 
 void potential( NODE *head, double *x, double *y, double *mass, double *V, int n)
 {
+	*V = 0;
 	for( int i=0;i<n;i++ ){
-		V[i]=0;
-		node_potential(head,x[i],y[i],mass[i],&V[i]);
+		node_potential(head,x[i],y[i],mass[i],V);
 	}
 }
 

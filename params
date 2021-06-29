@@ -1,14 +1,14 @@
 boxsize	100.0
-n	1000000
+n	10000000
 theta	0.8
-dt	0.000000001
-endtime	0.000000002
+dt	0.00001
+endtime	0.00002
 endstep 10
-record	2
-nx	1024
-ny	1024
+record	10
+nx	2048
+ny	2048
 tx	16
-ty	16		
-bx	32
-by	32
+ty	16	
+bx	128
+by	128
 	

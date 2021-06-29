@@ -16,8 +16,13 @@ __global__ void treeforce(double *px,double *py,double *pmass,double *fx,double 
 	double r,cfx,cfy,cv,x,y,m,side,temp,temp_v;
 	if( thread_id==0 ){ st_reg = 0; }
 	else{ st_reg = thread_load[thread_id-1]; }
+#ifdef BALANCE
 	for( int i=st_reg;i<thread_load[thread_id];i++ ){
 		reg_id = region_index[i];
+#else
+	while( thread_id<d_n_work ){
+		reg_id = thread_id;
+#endif
 		if( reg_id==0 ){
 			st_par = 0;
 			par_n = rn[reg_id];
@@ -54,7 +59,12 @@ __global__ void treeforce(double *px,double *py,double *pmass,double *fx,double 
 			}
 		}
 		atomicAdd(V,temp_v);
-				
+#ifdef BALANCE
+
+#else
+		thread_id += nx*nx;
+#endif	
+
 	}		
 }
 

@@ -53,7 +53,7 @@ __global__ void force_gpu(GNODE *root,double *x,double *y,double *mass,double *f
 						temp = r*r+d_eplison*d_eplison;
 						loc_fx += m*pm/sqrt(temp*temp*temp)*(cmx-px);
 						loc_fy += m*pm/sqrt(temp*temp*temp)*(cmy-py);
-						loc_v  += -m*pm/sqrt(temp*temp);
+						loc_v  += -m*pm/sqrt(temp);
 					}
 				}
 			}else{
@@ -78,7 +78,7 @@ __global__ void force_gpu(GNODE *root,double *x,double *y,double *mass,double *f
 		}*/
 		fx[id] = loc_fx;
 		fy[id] = loc_fy;
-		atomicAdd(V,loc_v);
+		atomicAdd(V,loc_v/2);
 		id += nx*nx;
 	}
 }
