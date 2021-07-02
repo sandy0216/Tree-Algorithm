@@ -3,14 +3,42 @@
 This is README file for the final project of 2021 CUDA parallel programming course
 Author : Huai-Hsuan Chiu
 Date   : June, 2021
-
+HOW TO COMPILE:
+=====
+Simply type :
+	make
+=====
+HOW TO RUN:
+Simply type :
+	./tree -CPU ./param	// For using CPU only
+or
+	./tree -GPU ./param	// For using GPU+CPU
+=====
+FILE:
+tree	Execution file of this project
+param	Runtime parameters of when running.
+	boxsize	: Boundary of the code, in code unit
+	n	: Total particle numbers
+	theta	: Parameter of tree algorithm, see the report in doc/
+	dt	: Time step
+	endtime	: End time of the simulation
+	endstep : End step of the simulation (No use yet)
+	record	: Record the result every 'record' steps
+	( The following are settings for GPU, see how to run the code )
+	nx	: How many subregion in x direction (suggested to be power of 2)
+	ny	: How many subregion in y direction (suggested to be power of 2)
+	tx	: Threads per block in x direction (suggested to be power of 2)
+	ty	: Threads per block in y direction (suggested to be power of 2)
+	bx	: Blocks per grid in x direction (suggested to be power of 2)
+	by	: Blocks per grid in y direction (suggested to be power of 2)
 =====
 DIRECTORY:
 
 input/	place to record input data
 output/	place to record output data
+doc/	Proposal : Original plan of this project.
+	Parallelization of Tree Algorithm : Summary of the current of this project
 inc/	header(*.h) of each file
-	param.h		: One can change the boxsize, number of particles, block size & grid size(for GPU) here.
 lib/    output(*.o) of the complie
 src/	source codes
 	main.cu		: main functions
@@ -24,15 +52,9 @@ src/	source codes
 	(Boundary checker, remove of the particle, update the position&velocity of the particle)
 	create_tree_gpu.cu	: GPU version of the tree creation
 	tool_tree_gpu.cu	: Tools of GPU tree creation
+	force_gpu.cu		: Force calculation with GPU
+	tree_gpu.cu		: Direct N-body calculator 
 	heap.cu			: Heap sort function
-=====
-HOW TO COMPILE:
-Simply type :
-	make
-=====
-HOW TO RUN:
-Simply type :
-	./tree -CPU/-GPU ./params
 	
 	
 
